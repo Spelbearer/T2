@@ -448,6 +448,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         try:
             for i, row in enumerate(self.data):
+                # Skip rows where the selected numerical grouping field is empty
+                if num_group_idx != -1:
+                    if num_group_idx >= len(row) or str(row[num_group_idx]).strip() == '':
+                        continue
+
                 target_container = kml
                 assigned_group = None
                 kml_object = None
