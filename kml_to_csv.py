@@ -11,7 +11,6 @@ from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtCore import Qt, QPoint, QRect 
 
 import numpy as np
-import jenkspy
 import pandas as pd
 
 class KmlGeneratorApp(QWidget):
@@ -901,19 +900,24 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         num_groups = self.num_groups_spinbox.value()
 
+
         # Use Jenks natural breaks when enough unique values are present
         distinct_values = sorted(list(set(numerical_values)))
 
         if len(distinct_values) >= num_groups and len(distinct_values) > 1:
             n_classes_for_jenks = min(num_groups, len(distinct_values) - 1)
             bins = jenkspy.jenks_breaks(numerical_values, n_classes=n_classes_for_jenks)
+
+        # Determine the full range of values, explicitly including zeros
+        min_val = min(numerical_values)
+        max_val = max(numerical_values)
+
+        # Build equally sized ranges from the minimum to the maximum
+        if min_val == max_val:
+            bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+
         else:
-            min_val = min(numerical_values)
-            max_val = max(numerical_values)
-            if min_val == max_val:
-                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
-            else:
-                bins = np.linspace(min_val, max_val, num_groups + 1)
+            bins = np.linspace(min_val, max_val, num_groups + 1)
         
         bins = sorted(list(set(bins)))
         
