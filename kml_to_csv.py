@@ -269,8 +269,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.num_groups_label.setStyleSheet(label_style)
         num_groups_layout.addWidget(self.num_groups_label)
         self.num_groups_spinbox = QSpinBox()
-        self.num_groups_spinbox.setMinimum(1)
-        self.num_groups_spinbox.setValue(5)
+        self.num_groups_spinbox.setMinimum(3)
+        self.num_groups_spinbox.setMaximum(5)
+        self.num_groups_spinbox.setValue(3)
         self.num_groups_spinbox.valueChanged.connect(self.on_numerical_grouping_field_changed)
         self.num_groups_spinbox.setStyleSheet(spinbox_style)
         num_groups_layout.addWidget(self.num_groups_spinbox)
@@ -448,6 +449,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         try:
             for i, row in enumerate(self.data):
+                # Skip rows where the selected numerical grouping field is empty
+                if num_group_idx != -1:
+                    if num_group_idx >= len(row) or str(row[num_group_idx]).strip() == '':
+                        continue
+
                 target_container = kml
                 assigned_group = None
                 kml_object = None
@@ -894,9 +900,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         num_groups = self.num_groups_spinbox.value()
-        
+
+        # Use Jenks natural breaks when enough unique values are present
         distinct_values = sorted(list(set(numerical_values)))
-        
+
         if len(distinct_values) >= num_groups and len(distinct_values) > 1:
             n_classes_for_jenks = min(num_groups, len(distinct_values) - 1)
             bins = jenkspy.jenks_breaks(numerical_values, n_classes=n_classes_for_jenks)
