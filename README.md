@@ -1,4 +1,4 @@
-T2
+
 
 This repository contains a PyQt application for converting tabular data into
 
@@ -11,3 +11,4 @@ reduced. Only the first twenty rows of the loaded file are shown in the
 preview table. Data can be filtered using a pandas-style expression
 entered in the **Filter formula** field to generate multiple layers from a
 single source.
+
