@@ -72,6 +72,22 @@ def parse_filter_expression(expr: str) -> str:
 
     # Quote bare words on the right side of comparisons
     def repl(match):
+
+        col = match.group(1).strip()
+        op = match.group(2)
+        val = match.group(3).strip()
+
+        col_token = f'`{col}`' if not re.fullmatch(r'\w+', col) else col
+
+        if re.fullmatch(r'-?\d+(\.\d+)?', val):
+            return f"{col_token}{op}{val}"
+        if not (val.startswith('"') or val.startswith("'")):
+            val = f'"{val}"'
+        return f"{col_token}{op}{val}"
+
+    expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
+    return expr
+
         col, op, val = match.group(1), match.group(2), match.group(3)
         if re.fullmatch(r'-?\d+(\.\d+)?', val):
             return f"{col}{op}{val}"
@@ -947,12 +963,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             try:
                 df = pd.DataFrame(self.data, columns=self.headers)
 
+                df_numeric = df.copy()
+                for col, t in self.field_types.items():
+                    if t in ["int", "float"] and col in df_numeric.columns:
+                        df_numeric[col] = pd.to_numeric(
+                            df_numeric[col].astype(str).str.replace(",", "."),
+                            errors="coerce",
+                        )
+
+                parsed = parse_filter_expression(formula)
+                filtered_indices = df_numeric.query(parsed).index
+                self.filtered_data = df.loc[filtered_indices].values.tolist()
+
+
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
 
                 filtered_df = df.query(formula)
 
                 self.filtered_data = filtered_df.values.tolist()
+
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
                 return
@@ -1080,7 +1110,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
+
+            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+
             if len(set(bins)) < len(bins):
+
 
                 if min_val == max_val:
                     bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
@@ -1096,6 +1130,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
 
+
+
         bins = list(bins)
 
         if len(bins) != num_groups + 1:
@@ -1103,6 +1139,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
+
+            bins = list(bins)
 
             bins = list(bins)
 
