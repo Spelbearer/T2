@@ -13,6 +13,53 @@ from PyQt6.QtCore import Qt, QPoint, QRect
 import numpy as np
 import pandas as pd
 
+
+def jenks_breaks(data, num_classes):
+    """Calculate Jenks natural breaks for the given data."""
+    if not data or num_classes <= 0:
+        return []
+
+    data = sorted(data)
+    num_data = len(data)
+    if num_classes > num_data:
+        num_classes = num_data
+
+    mat1 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+    mat2 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+
+    for i in range(1, num_classes + 1):
+        mat1[0][i] = 1
+        mat2[0][i] = 0
+        for j in range(1, num_data + 1):
+            mat2[j][i] = float('inf')
+
+    for l in range(1, num_data + 1):
+        s1 = s2 = w = 0.0
+        for m in range(l, 0, -1):
+            val = data[m - 1]
+            s1 += val
+            s2 += val * val
+            w += 1
+            variance = s2 - (s1 * s1) / w
+            if m > 1:
+                for j in range(2, num_classes + 1):
+                    if mat2[l][j] >= variance + mat2[m - 1][j - 1]:
+                        mat1[l][j] = m
+                        mat2[l][j] = variance + mat2[m - 1][j - 1]
+        mat1[l][1] = 1
+        mat2[l][1] = variance
+
+    breaks = [0] * (num_classes + 1)
+    breaks[num_classes] = data[-1]
+    k = num_data
+    for j in range(num_classes, 1, -1):
+        idx = int(mat1[k][j] - 2)
+        breaks[j - 1] = data[idx]
+        k = int(mat1[k][j] - 1)
+    breaks[0] = data[0]
+
+    return breaks
+
 class KmlGeneratorApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -268,8 +315,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.num_groups_label.setStyleSheet(label_style)
         num_groups_layout.addWidget(self.num_groups_label)
         self.num_groups_spinbox = QSpinBox()
-        self.num_groups_spinbox.setMinimum(3)
-        self.num_groups_spinbox.setMaximum(5)
+        self.num_groups_spinbox.setMinimum(1)
+        self.num_groups_spinbox.setMaximum(20)
         self.num_groups_spinbox.setValue(3)
         self.num_groups_spinbox.valueChanged.connect(self.on_numerical_grouping_field_changed)
         self.num_groups_spinbox.setStyleSheet(spinbox_style)
@@ -904,27 +951,28 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         min_val = min(numerical_values)
         max_val = max(numerical_values)
 
-        # Build equally sized ranges from the minimum to the maximum
-        if min_val == max_val:
-            bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+        unique_values = sorted(set(numerical_values))
+
+        if len(unique_values) > 2 and num_groups > 1:
+            bins = jenks_breaks(numerical_values, num_groups)
+            if len(set(bins)) < len(bins):
+                if min_val == max_val:
+                    bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+                else:
+                    bins = np.linspace(min_val, max_val, num_groups + 1)
         else:
-            bins = np.linspace(min_val, max_val, num_groups + 1)
-        
-        bins = sorted(list(set(bins)))
-        
-        if len(bins) - 1 < num_groups:
-             num_groups = len(bins) - 1
-             if num_groups < 1 and numerical_values:
-                 num_groups = 1
-                 bins = [min(numerical_values), max(numerical_values)]
-                 if bins[0] == bins[1]:
-                     bins[1] += 1
-             elif num_groups < 1 and not numerical_values:
-                 self.num_groups_spinbox.setValue(1)
-                 self.groups = []
-                 self.update_group_display()
-                 return
-             self.num_groups_spinbox.setValue(num_groups)
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
+
+        bins = list(bins)
+
+        if len(bins) != num_groups + 1:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
 
         self.groups = []
         start_color = QColor(255, 255, 255)
