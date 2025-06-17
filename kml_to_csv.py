@@ -88,6 +88,7 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
+
         col, op, val = match.group(1), match.group(2), match.group(3)
         if re.fullmatch(r'-?\d+(\.\d+)?', val):
             return f"{col}{op}{val}"
@@ -145,6 +146,7 @@ def jenks_breaks(data, num_classes):
     breaks[0] = data[0]
 
     return breaks
+
 
 class KmlGeneratorApp(QWidget):
     def __init__(self):
@@ -963,9 +965,27 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             try:
                 df = pd.DataFrame(self.data, columns=self.headers)
 
+
+                numeric_cols = set()
+                for col, t in self.field_types.items():
+                    if t in ["int", "float"]:
+                        numeric_cols.add(col)
+
+                pattern = r"([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)"
+                for col, op, val in re.findall(pattern, formula):
+                    col = col.strip()
+                    val_clean = val.strip().strip("'\"")
+                    if op in [">", "<", ">=", "<="] or re.fullmatch(r"-?\d+(\.\d+)?", val_clean):
+                        numeric_cols.add(col)
+
+                df_numeric = df.copy()
+                for col in numeric_cols:
+                    if col in df_numeric.columns:
+
                 df_numeric = df.copy()
                 for col, t in self.field_types.items():
                     if t in ["int", "float"] and col in df_numeric.columns:
+
                         df_numeric[col] = pd.to_numeric(
                             df_numeric[col].astype(str).str.replace(",", "."),
                             errors="coerce",
@@ -976,12 +996,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 self.filtered_data = df.loc[filtered_indices].values.tolist()
 
 
+
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
 
                 filtered_df = df.query(formula)
 
                 self.filtered_data = filtered_df.values.tolist()
+
 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
@@ -1113,8 +1135,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
-            if len(set(bins)) < len(bins):
 
+            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+
+            if len(set(bins)) < len(bins):
 
                 if min_val == max_val:
                     bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
@@ -1127,12 +1151,23 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = np.linspace(min_val, max_val, num_groups + 1)
 
 
+        bins = list(bins)
+
+        if len(bins) != num_groups + 1:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
+            bins = list(bins)
+
+
 
 
 
 
 
         bins = list(bins)
+
 
         if len(bins) != num_groups + 1:
             if min_val == max_val:
