@@ -15,6 +15,9 @@ import pandas as pd
 import re
 
 
+MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
+
+
 def jenks_breaks(data, num_classes):
     """Calculate Jenks natural breaks for the given data."""
     if not data or num_classes <= 0:
@@ -72,6 +75,8 @@ def parse_filter_expression(expr: str) -> str:
 
     # Quote bare words on the right side of comparisons
     def repl(match):
+
+
 
         col = match.group(1).strip()
         op = match.group(2)
@@ -146,8 +151,6 @@ def jenks_breaks(data, num_classes):
     breaks[0] = data[0]
 
     return breaks
-
-
 
 class KmlGeneratorApp(QWidget):
     def __init__(self):
@@ -524,7 +527,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 self._auto_cast_numeric()
                 self.filtered_data = [row[:] for row in self.data]
 
+
+                self._auto_cast_numeric()
+                self.filtered_data = [row[:] for row in self.data]
+
                 self.filtered_data = self.data[:]
+
 
                 if hasattr(self, 'filter_input'):
                     self.filter_input.setText('')
@@ -547,7 +555,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                         self._auto_cast_numeric()
                         self.filtered_data = [row[:] for row in self.data]
 
+
+                        self._auto_cast_numeric()
+                        self.filtered_data = [row[:] for row in self.data]
+
                         self.filtered_data = self.data[:]
+
 
                         if hasattr(self, 'filter_input'):
                             self.filter_input.setText('')
@@ -705,6 +718,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         int_pattern = re.compile(r"^-?\d+$")
         float_pattern = re.compile(r"^-?\d+(?:[.,]\d+)?$")
 
+        missing_vals = MISSING_VALS
+
+
         for col_idx in range(num_cols):
             is_int_col = True
             is_numeric_col = True
@@ -712,7 +728,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if col_idx >= len(row):
                     continue
                 val = str(row[col_idx]).strip()
+
+                if val.lower() in missing_vals:
+
                 if val == "":
+
                     continue
                 val_dot = val.replace(",", ".")
                 if int_pattern.fullmatch(val_dot):
@@ -730,7 +750,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if col_idx >= len(row):
                     continue
                 val = str(row[col_idx]).strip()
+
+                if val.lower() in missing_vals:
+
                 if val == "":
+
                     row[col_idx] = ""
                     continue
                 val_dot = val.replace(",", ".")
@@ -763,8 +787,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             for r_idx in range(min(len(data), 100)):
                 if i < len(data[r_idx]):
                     value = str(data[r_idx][i]).strip()
-                    if value:
-                        sample_values.append(value)
+                    if value.lower() in MISSING_VALS or value == "":
+                        continue
+                    sample_values.append(value)
 
             if not sample_values:
                 inferred_types[field_name] = 'varchar'
@@ -926,8 +951,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for r_idx in range(min(len(self.data), 100)):
             if column_index < len(self.data[r_idx]):
                 value = str(self.data[r_idx][column_index]).strip()
-                if value:
-                    sample_values.append(value)
+                if value.lower() in MISSING_VALS or value == "":
+                    continue
+                sample_values.append(value)
 
         if not sample_values:
             return 'varchar'
@@ -1042,6 +1068,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     if t in ["int", "float"] and col in df_numeric.columns:
 
 
+
                         df_numeric[col] = pd.to_numeric(
                             df_numeric[col].astype(str).str.replace(",", "."),
                             errors="coerce",
@@ -1054,12 +1081,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
 
+
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
 
                 filtered_df = df.query(formula)
 
                 self.filtered_data = filtered_df.values.tolist()
+
 
 
 
@@ -1199,7 +1228,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
+
+            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+
             if len(set(bins)) < len(bins):
+
 
 
                 if min_val == max_val:
@@ -1230,6 +1263,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
+
 
             bins = list(bins)
 
