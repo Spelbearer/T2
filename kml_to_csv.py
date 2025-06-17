@@ -83,6 +83,53 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
+
+def jenks_breaks(data, num_classes):
+    """Calculate Jenks natural breaks for the given data."""
+    if not data or num_classes <= 0:
+        return []
+
+    data = sorted(data)
+    num_data = len(data)
+    if num_classes > num_data:
+        num_classes = num_data
+
+    mat1 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+    mat2 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+
+    for i in range(1, num_classes + 1):
+        mat1[0][i] = 1
+        mat2[0][i] = 0
+        for j in range(1, num_data + 1):
+            mat2[j][i] = float('inf')
+
+    for l in range(1, num_data + 1):
+        s1 = s2 = w = 0.0
+        for m in range(l, 0, -1):
+            val = data[m - 1]
+            s1 += val
+            s2 += val * val
+            w += 1
+            variance = s2 - (s1 * s1) / w
+            if m > 1:
+                for j in range(2, num_classes + 1):
+                    if mat2[l][j] >= variance + mat2[m - 1][j - 1]:
+                        mat1[l][j] = m
+                        mat2[l][j] = variance + mat2[m - 1][j - 1]
+        mat1[l][1] = 1
+        mat2[l][1] = variance
+
+    breaks = [0] * (num_classes + 1)
+    breaks[num_classes] = data[-1]
+    k = num_data
+    for j in range(num_classes, 1, -1):
+        idx = int(mat1[k][j] - 2)
+        breaks[j - 1] = data[idx]
+        k = int(mat1[k][j] - 1)
+    breaks[0] = data[0]
+
+    return breaks
+
 class KmlGeneratorApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -899,8 +946,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         else:
             try:
                 df = pd.DataFrame(self.data, columns=self.headers)
+
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
+
+                filtered_df = df.query(formula)
+
                 self.filtered_data = filtered_df.values.tolist()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
@@ -1026,7 +1077,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         if len(unique_values) > 2 and num_groups > 1:
             bins = jenks_breaks(numerical_values, num_groups)
+
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+
+            if len(set(bins)) < len(bins):
+
                 if min_val == max_val:
                     bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
                 else:
@@ -1037,6 +1092,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
 
+
+
+
+
         bins = list(bins)
 
         if len(bins) != num_groups + 1:
@@ -1044,8 +1103,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
+
             bins = list(bins)
 
+
+        bins = list(bins)
+
+
+        if len(bins) != num_groups + 1:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
+
+
+        if len(bins) != num_groups + 1:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
+                
         self.groups = []
         start_color = QColor(255, 255, 255)
         end_color = self.end_color
