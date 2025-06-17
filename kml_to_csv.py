@@ -953,29 +953,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         unique_values = sorted(set(numerical_values))
 
-        if len(unique_values) >= num_groups:
+        if len(unique_values) > 2 and num_groups > 1:
             bins = jenks_breaks(numerical_values, num_groups)
+            if len(set(bins)) < len(bins):
+                if min_val == max_val:
+                    bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+                else:
+                    bins = np.linspace(min_val, max_val, num_groups + 1)
         else:
             if min_val == max_val:
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
-        
-        bins = sorted(list(set(bins)))
-        
-        if len(bins) - 1 < num_groups:
-             num_groups = len(bins) - 1
-             if num_groups < 1 and numerical_values:
-                 num_groups = 1
-                 bins = [min(numerical_values), max(numerical_values)]
-                 if bins[0] == bins[1]:
-                     bins[1] += 1
-             elif num_groups < 1 and not numerical_values:
-                 self.num_groups_spinbox.setValue(1)
-                 self.groups = []
-                 self.update_group_display()
-                 return
-             self.num_groups_spinbox.setValue(num_groups)
+
+        bins = list(bins)
+
+        if len(bins) != num_groups + 1:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
 
         self.groups = []
         start_color = QColor(255, 255, 255)
