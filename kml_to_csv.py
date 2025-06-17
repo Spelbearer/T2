@@ -973,7 +973,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
-
+                
         self.groups = []
         start_color = QColor(255, 255, 255)
         end_color = self.end_color
