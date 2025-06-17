@@ -64,6 +64,7 @@ class KmlGeneratorApp(QWidget):
     def __init__(self):
         super().__init__()
         self.data = []
+        self.filtered_data = []  # Store data after applying filter expressions
         self.headers = []
         self.group_colors = {}
         self.groups = []
@@ -339,6 +340,23 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         grouping_options_layout.addLayout(self.numerical_color_display_layout)
         layout.addWidget(grouping_group_box)
 
+        # Data filtering controls
+        filter_group_box = QGroupBox("Data Filtering")
+        filter_group_box.setFont(bold_large_font)
+        filter_layout = QHBoxLayout()
+        self.filter_label = QLabel('Filter formula:')
+        self.filter_label.setStyleSheet(label_style)
+        filter_layout.addWidget(self.filter_label)
+        self.filter_input = QLineEdit()
+        self.filter_input.setStyleSheet(lineedit_style)
+        filter_layout.addWidget(self.filter_input)
+        self.apply_filter_button = QPushButton('Apply Filter')
+        self.apply_filter_button.setStyleSheet(button_style + button_hover_style)
+        self.apply_filter_button.clicked.connect(self.apply_filter)
+        filter_layout.addWidget(self.apply_filter_button)
+        filter_group_box.setLayout(filter_layout)
+        layout.addWidget(filter_group_box)
+
         self.data_table = QTableWidget()
         self.data_table.setMinimumHeight(300)
         self.data_table.setStyleSheet(table_style)
@@ -389,6 +407,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
     def load_data(self, file_path):
         """Загружает данные из файла с учетом выбранных параметров."""
         self.data = []
+        self.filtered_data = []
         self.headers = []
         self.field_types = {}
         self.manual_group_bounds = {} # Clear manual bounds on new file load
@@ -411,6 +430,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 df = df.fillna('')
                 self.headers = df.columns.astype(str).tolist()
                 self.data = df.values.tolist()
+                self.filtered_data = self.data[:]
+                if hasattr(self, 'filter_input'):
+                    self.filter_input.setText('')
             else:
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
@@ -426,8 +448,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     
                     if data_start_index < len(all_lines):
                         self.data = all_lines[data_start_index:]
+                        self.filtered_data = self.data[:]
+                        if hasattr(self, 'filter_input'):
+                            self.filter_input.setText('')
                     else:
                         self.data = []
+                        self.filtered_data = []
+                        if hasattr(self, 'filter_input'):
+                            self.filter_input.setText('')
 
                     if not has_header and self.data:
                         self.headers = [f'Column {i}' for i in range(len(self.data[0]))]
@@ -449,7 +477,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
-            self.data, self.headers, self.field_types = [], [], {}
+            self.data, self.filtered_data, self.headers, self.field_types = [], [], [], {}
             self.preview_data()
             self.update_field_combos()
 
@@ -459,7 +487,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if not output_file:
             QMessageBox.warning(self, "Warning", "Пожалуйста, укажите выходной KML-файл.")
             return
-        if not self.data:
+        if not self.filtered_data:
             QMessageBox.warning(self, "Warning", "Нет данных для генерации KML.")
             return
 
@@ -494,7 +522,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
 
         try:
-            for i, row in enumerate(self.data):
+            for i, row in enumerate(self.filtered_data):
                 # Skip rows where the selected numerical grouping field is empty
                 if num_group_idx != -1:
                     if num_group_idx >= len(row) or str(row[num_group_idx]).strip() == '':
@@ -839,18 +867,35 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.kml_label_field_combo.setCurrentText(all_fields[0])
 
 
+    def apply_filter(self):
+        """Apply the filter expression from the input field to the data."""
+        formula = self.filter_input.text().strip()
+        if not formula:
+            self.filtered_data = self.data[:]
+        else:
+            try:
+                df = pd.DataFrame(self.data, columns=self.headers)
+                filtered_df = df.query(formula)
+                self.filtered_data = filtered_df.values.tolist()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
+                return
+        self.preview_data()
+        self.on_numerical_grouping_field_changed()
+
+
     def preview_data(self):
         """
         Displays a preview of the loaded data in a QTableWidget.
         Headers will show field name and its inferred/selected type.
         """
         self.data_table.clear()
-        if not self.data and not self.headers:
+        if not self.filtered_data and not self.headers:
             self.data_table.setRowCount(0)
             self.data_table.setColumnCount(0)
             return
-        
-        num_columns = len(self.headers) if self.headers else (len(self.data[0]) if self.data else 0)
+
+        num_columns = len(self.headers) if self.headers else (len(self.filtered_data[0]) if self.filtered_data else 0)
         
         if num_columns == 0:
             self.data_table.setRowCount(0)
@@ -865,9 +910,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             header_labels.append(f"{header_name}\n({inferred_type})")
         self.data_table.setHorizontalHeaderLabels(header_labels)
 
-        self.data_table.setRowCount(len(self.data))
+        preview_rows = self.filtered_data[:20]
+        self.data_table.setRowCount(len(preview_rows))
 
-        for i, row in enumerate(self.data):
+        for i, row in enumerate(preview_rows):
             for j, item in enumerate(row):
                 if j < self.data_table.columnCount():
                     self.data_table.setItem(i, j, QTableWidgetItem(str(item)))
@@ -928,13 +974,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.groups = []
 
         selected_field = self.numerical_group_field_combo.currentText()
-        if not selected_field or not self.data or selected_field not in self.headers:
+        if not selected_field or not self.filtered_data or selected_field not in self.headers:
             self.update_group_display()
             return
 
         col_index = self.headers.index(selected_field)
         numerical_values = []
-        for row in self.data:
+        for row in self.filtered_data:
             if col_index < len(row):
                 try:
                     numerical_values.append(float(str(row[col_index]).replace(',', '.')))
@@ -961,6 +1007,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 else:
                     bins = np.linspace(min_val, max_val, num_groups + 1)
         else:
+            if min_val == max_val:
+                bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+            else:
+                bins = np.linspace(min_val, max_val, num_groups + 1)
+
+
+        bins = list(bins)
+
+        if len(bins) != num_groups + 1:
             if min_val == max_val:
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
@@ -1037,9 +1092,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         selected_field = self.numerical_group_field_combo.currentText()
         numerical_values = []
-        if selected_field and self.data and self.headers and selected_field in self.headers:
+        if selected_field and self.filtered_data and self.headers and selected_field in self.headers:
             col_index = self.headers.index(selected_field)
-            for row in self.data:
+            for row in self.filtered_data:
                 if col_index < len(row):
                     try:
                         numerical_values.append(float(str(row[col_index]).replace(',', '.')))
