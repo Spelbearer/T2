@@ -76,8 +76,6 @@ def parse_filter_expression(expr: str) -> str:
     # Quote bare words on the right side of comparisons
     def repl(match):
 
-
-
         col = match.group(1).strip()
         op = match.group(2)
         val = match.group(3).strip()
@@ -93,18 +91,16 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
-
-        col, op, val = match.group(1), match.group(2), match.group(3)
-        if re.fullmatch(r'-?\d+(\.\d+)?', val):
-            return f"{col}{op}{val}"
-        # Wrap strings that are not already quoted
-        if not (val.startswith('"') or val.startswith("'")):
-            val = f'"{val}"'
+    col, op, val = match.group(1), match.group(2), match.group(3)
+    if re.fullmatch(r'-?\d+(\.\d+)?', val):
         return f"{col}{op}{val}"
+    # Wrap strings that are not already quoted
+    if not (val.startswith('"') or val.startswith("'")):
+        val = f'"{val}"'
+    return f"{col}{op}{val}"
 
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
-
 
 def jenks_breaks(data, num_classes):
     """Calculate Jenks natural breaks for the given data."""
@@ -731,9 +727,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 if val.lower() in missing_vals:
 
-                if val == "":
+                    if val == "":
 
-                    continue
+                        continue
                 val_dot = val.replace(",", ".")
                 if int_pattern.fullmatch(val_dot):
                     continue
@@ -753,10 +749,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 if val.lower() in missing_vals:
 
-                if val == "":
+                    if val == "":
 
-                    row[col_idx] = ""
-                    continue
+                        row[col_idx] = ""
+                        continue
                 val_dot = val.replace(",", ".")
                 try:
                     row[col_idx] = int(val_dot) if is_int_col else float(val_dot)
@@ -1063,16 +1059,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 for col in numeric_cols:
                     if col in df_numeric.columns:
 
-                df_numeric = df.copy()
-                for col, t in self.field_types.items():
-                    if t in ["int", "float"] and col in df_numeric.columns:
+                        df_numeric = df.copy()
+                        for col, t in self.field_types.items():
+                            if t in ["int", "float"] and col in df_numeric.columns:
 
 
 
-                        df_numeric[col] = pd.to_numeric(
-                            df_numeric[col].astype(str).str.replace(",", "."),
-                            errors="coerce",
-                        )
+                                df_numeric[col] = pd.to_numeric(
+                                    df_numeric[col].astype(str).str.replace(",", "."),
+                                    errors="coerce",
+                                )
 
                 parsed = parse_filter_expression(formula)
                 filtered_indices = df_numeric.query(parsed).index
@@ -1220,25 +1216,23 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
 
-            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+                if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
 
-            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+                    if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
 
-            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+                        if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
 
-            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
+                            if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
-            if len(set(bins)) < len(bins):
+                                if len(set(bins)) < len(bins):
 
-
-
-                if min_val == max_val:
-                    bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
-                else:
-                    bins = np.linspace(min_val, max_val, num_groups + 1)
+                                    if min_val == max_val:
+                                        bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
+                                    else:
+                                        bins = np.linspace(min_val, max_val, num_groups + 1)
         else:
             if min_val == max_val:
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
