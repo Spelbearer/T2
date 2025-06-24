@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QPushButton, QFileDialog, QLineEdit, QComboBox, QColorDialog,
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
 from PyQt6.QtCore import Qt, QPoint, QRect
 
 import numpy as np
@@ -18,6 +18,50 @@ import colorsys
 
 MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
 
+
+class CheckableComboBox(QComboBox):
+    """A QComboBox allowing multiple selection via checkable items."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setModel(QStandardItemModel(self))
+        self.view().pressed.connect(self.handle_item_pressed)
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText("")
+
+    def addItem(self, text, data=None):
+        item = QStandardItem(text)
+        item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+        item.setData(Qt.CheckState.Unchecked, Qt.ItemDataRole.CheckStateRole)
+        if data is not None:
+            item.setData(data, Qt.ItemDataRole.UserRole)
+        self.model().appendRow(item)
+        self.update_display_text()
+
+    def clear(self):
+        self.model().clear()
+        self.update_display_text()
+
+    def handle_item_pressed(self, index):
+        item = self.model().itemFromIndex(index)
+        if item.checkState() == Qt.CheckState.Checked:
+            item.setCheckState(Qt.CheckState.Unchecked)
+        else:
+            item.setCheckState(Qt.CheckState.Checked)
+        self.update_display_text()
+
+    def checkedItems(self):
+        items = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.checkState() == Qt.CheckState.Checked:
+                items.append(item.text())
+        return items
+
+    def update_display_text(self):
+        checked = self.checkedItems()
+        self.lineEdit().setText(", ".join(checked))
 
 def jenks_breaks(data, num_classes):
     """Calculate Jenks natural breaks for the given data."""
@@ -364,9 +408,19 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.kml_label_field_layout.addWidget(self.kml_label_field_label)
         self.kml_label_field_layout.addWidget(self.kml_label_field_combo)
         coord_layout.addLayout(self.kml_label_field_layout)
-        
+
         self.kml_label_field_label.setVisible(False)
         self.kml_label_field_combo.setVisible(False)
+
+        # Description fields selection
+        desc_layout = QHBoxLayout()
+        self.description_fields_label = QLabel('Description Fields:')
+        self.description_fields_label.setStyleSheet(label_style)
+        self.description_fields_combo = CheckableComboBox()
+        self.description_fields_combo.setStyleSheet(combobox_style)
+        desc_layout.addWidget(self.description_fields_label)
+        desc_layout.addWidget(self.description_fields_combo)
+        coord_layout.addLayout(desc_layout)
 
         self.use_custom_icon_checkbox = QCheckBox('Use Custom Icon')
         self.use_custom_icon_checkbox.setChecked(False)
@@ -746,6 +800,22 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             kml_object.style.polystyle.color = kml_color
                             kml_object.style.linestyle.color = kml_color
 
+                # Build description snippet
+                desc_fields = self.description_fields_combo.checkedItems()
+                if desc_fields:
+                    lines = []
+                    for field in desc_fields:
+                        idx = field_indices.get(field, -1)
+                        value = ''
+                        if idx != -1 and idx < len(row):
+                            value = row[idx]
+                        lines.append(f"<b>{field}</b>: {value}")
+                    snippet_html = "<br>".join(lines)
+                    try:
+                        kml_object.snippet = simplekml.Snippet(snippet_html, maxlines=len(lines))
+                    except Exception:
+                        kml_object.snippet = snippet_html
+
                 if isinstance(kml_object, simplekml.Point):
                     use_custom_icon = self.use_custom_icon_checkbox.isChecked()
                     custom_icon_url = self.icon_url_input.text()
@@ -1052,7 +1122,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if not self.data and not self.headers:
             for combo in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
                           self.numerical_group_field_combo, self.categorical_group_field_combo,
-                          self.kml_label_field_combo]:
+                          self.kml_label_field_combo, self.description_fields_combo]:
                 combo.clear()
             return
 
@@ -1066,9 +1136,18 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                   self.numerical_group_field_combo, self.categorical_group_field_combo,
                   self.kml_label_field_combo]
         current_texts = [c.currentText() for c in combos]
+        selected_desc = set(self.description_fields_combo.checkedItems())
 
         for c in combos:
             c.clear()
+
+        self.description_fields_combo.clear()
+        for field in all_fields:
+            self.description_fields_combo.addItem(field)
+            if field in selected_desc:
+                items = self.description_fields_combo.model().findItems(field)
+                if items:
+                    items[0].setCheckState(Qt.CheckState.Checked)
 
         for c in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.kml_label_field_combo]:
             c.addItems(all_fields)
