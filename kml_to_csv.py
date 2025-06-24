@@ -1,5 +1,8 @@
 import sys
 import csv
+
+# Allow very large geometry strings when reading CSV files
+csv.field_size_limit(1000000)
 import simplekml
 from shapely.geometry import Point
 from shapely import wkt
@@ -788,17 +791,35 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             elif geom.geom_type == 'LineString':
                                 kml_objects.append(target_container.newlinestring(name=label_text, coords=list(geom.coords)))
                             elif geom.geom_type == 'Polygon':
-                                poly = target_container.newpolygon(name=label_text, outerboundaryis=list(geom.exterior.coords),
-                                                                  innerboundaryis=[list(r.coords) for r in geom.interiors])
+                                poly = target_container.newpolygon(
+                                    name=label_text,
+                                    outerboundaryis=list(geom.exterior.coords),
+                                    innerboundaryis=[list(r.coords) for r in geom.interiors],
+                                )
                                 kml_objects.append(poly)
+                                if label_text:
+                                    pt = geom.representative_point()
+                                    label_point = target_container.newpoint(
+                                        name=label_text,
+                                        coords=[(pt.x, pt.y)],
+                                    )
+                                    kml_objects.append(label_point)
                             elif geom.geom_type == 'MultiPolygon':
+                                largest_poly = max(geom.geoms, key=lambda g: g.area)
+                                label_pt = largest_poly.representative_point() if label_text else None
                                 for poly_geom in geom.geoms:
                                     poly = target_container.newpolygon(
                                         name=label_text,
                                         outerboundaryis=list(poly_geom.exterior.coords),
-                                        innerboundaryis=[list(r.coords) for r in poly_geom.interiors]
+                                        innerboundaryis=[list(r.coords) for r in poly_geom.interiors],
                                     )
                                     kml_objects.append(poly)
+                                if label_text:
+                                    label_point = target_container.newpoint(
+                                        name=label_text,
+                                        coords=[(label_pt.x, label_pt.y)],
+                                    )
+                                    kml_objects.append(label_point)
                         except Exception as e:
                             print(f"Row {i+1} WKT Error: {e}"); continue
                 else:
@@ -816,20 +837,22 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
                     if color:
-
                         alpha = int(255 * (self.group_opacity / 100))
-                        kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue(), alpha)
-
-                        kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue())
+                        fill_color = simplekml.Color.rgb(
+                            color.red(), color.green(), color.blue(), alpha
+                        )
+                        line_color = simplekml.Color.rgb(
+                            color.red(), color.green(), color.blue()
+                        )
 
                         for obj in kml_objects:
                             if isinstance(obj, simplekml.Point):
-                                obj.style.iconstyle.color = kml_color
+                                obj.style.iconstyle.color = line_color
                             elif isinstance(obj, simplekml.LineString):
-                                obj.style.linestyle.color = kml_color
+                                obj.style.linestyle.color = line_color
                             elif isinstance(obj, simplekml.Polygon):
-                                obj.style.polystyle.color = kml_color
-                                obj.style.linestyle.color = kml_color
+                                obj.style.polystyle.color = fill_color
+                                obj.style.linestyle.color = line_color
 
                 # Build description snippet
                 desc_fields = self.description_fields_combo.checkedItems()
@@ -1325,7 +1348,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for i, row in enumerate(preview_rows):
             for j, item in enumerate(row):
                 if j < self.data_table.columnCount():
-                    self.data_table.setItem(i, j, QTableWidgetItem(str(item)))
+                    header_name = self.headers[j]
+                    field_type = self.field_types.get(header_name)
+                    display_text = str(item)
+                    if field_type == 'geometry' and len(display_text) > 1000:
+                        display_text = display_text[:1000]
+                    self.data_table.setItem(i, j, QTableWidgetItem(display_text))
 
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
