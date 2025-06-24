@@ -8,11 +8,12 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont
-from PyQt6.QtCore import Qt, QPoint, QRect 
+from PyQt6.QtCore import Qt, QPoint, QRect
 
 import numpy as np
 import pandas as pd
 import re
+import colorsys
 
 
 MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
@@ -160,6 +161,7 @@ class KmlGeneratorApp(QWidget):
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
+        self.grouping_mode = 'numerical'
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
         self.current_header_combo_column = -1 # Track which column the combo belongs to
 
@@ -385,11 +387,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         
         self.on_coord_system_changed() 
 
-        grouping_group_box = QGroupBox("Numerical Grouping Settings")
+        grouping_group_box = QGroupBox("Grouping Settings")
         grouping_group_box.setFont(bold_large_font)
         grouping_options_layout = QVBoxLayout()
         grouping_options_layout.setContentsMargins(10, 15, 10, 15)
         grouping_group_box.setLayout(grouping_options_layout)
+
+        mode_layout = QHBoxLayout()
+        self.numeric_mode_radio = QRadioButton('Numeric Ranges')
+        self.unique_mode_radio = QRadioButton('Unique Values')
+        self.numeric_mode_radio.setChecked(True)
+        self.numeric_mode_radio.setStyleSheet(radio_button_style)
+        self.unique_mode_radio.setStyleSheet(radio_button_style)
+        self.numeric_mode_radio.toggled.connect(self.on_grouping_mode_changed)
+        self.grouping_mode_group = QButtonGroup(self)
+        self.grouping_mode_group.addButton(self.numeric_mode_radio)
+        self.grouping_mode_group.addButton(self.unique_mode_radio)
+        mode_layout.addWidget(self.numeric_mode_radio)
+        mode_layout.addWidget(self.unique_mode_radio)
+        mode_layout.addStretch(1)
+        grouping_options_layout.addLayout(mode_layout)
         numerical_field_selection_layout = QHBoxLayout()
         self.numerical_group_label = QLabel('Numerical Grouping Field:')
         self.numerical_group_label.setStyleSheet(label_style)
@@ -426,6 +443,27 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.numerical_color_label.setStyleSheet(label_style)
         self.numerical_color_display_layout.addWidget(self.numerical_color_label)
         grouping_options_layout.addLayout(self.numerical_color_display_layout)
+
+        categorical_field_layout = QHBoxLayout()
+        self.categorical_group_label = QLabel('Categorical Grouping Field:')
+        self.categorical_group_label.setStyleSheet(label_style)
+        categorical_field_layout.addWidget(self.categorical_group_label)
+        self.categorical_group_field_combo = QComboBox()
+        self.categorical_group_field_combo.currentIndexChanged.connect(self.on_categorical_grouping_field_changed)
+        self.categorical_group_field_combo.setStyleSheet(combobox_style)
+        categorical_field_layout.addWidget(self.categorical_group_field_combo)
+        grouping_options_layout.addLayout(categorical_field_layout)
+
+        self.categorical_color_display_layout = QVBoxLayout()
+        self.categorical_color_label = QLabel('Unique Values and Colors:')
+        self.categorical_color_label.setStyleSheet(label_style)
+        self.categorical_color_display_layout.addWidget(self.categorical_color_label)
+        grouping_options_layout.addLayout(self.categorical_color_display_layout)
+
+        # Hide categorical controls initially
+        self.categorical_group_label.setVisible(False)
+        self.categorical_group_field_combo.setVisible(False)
+        self.categorical_color_label.setVisible(False)
         layout.addWidget(grouping_group_box)
 
         # Data filtering controls
@@ -582,7 +620,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             
             self.preview_data()
             self.update_field_combos()
-            self.on_numerical_grouping_field_changed()
+            if self.grouping_mode == 'numerical':
+                self.on_numerical_grouping_field_changed()
+            else:
+                self.on_categorical_grouping_field_changed()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
@@ -616,6 +657,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
         num_group_idx = field_indices.get(self.numerical_group_field_combo.currentText(), -1)
+        cat_group_idx = field_indices.get(self.categorical_group_field_combo.currentText(), -1)
 
         if use_wkt and wkt_idx == -1:
             QMessageBox.critical(self, "Error", "Выбранное поле WKT не найдено.")
@@ -625,33 +667,44 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         kml_folders = {}
-        grouping_active = num_group_idx != -1 and self.groups
+        if self.grouping_mode == 'numerical':
+            grouping_active = num_group_idx != -1 and self.groups
+        else:
+            grouping_active = cat_group_idx != -1 and self.groups
         if grouping_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
 
         try:
             for i, row in enumerate(self.filtered_data):
-                # Skip rows where the selected numerical grouping field is empty
-                if num_group_idx != -1:
+                if self.grouping_mode == 'numerical' and num_group_idx != -1:
                     if num_group_idx >= len(row) or str(row[num_group_idx]).strip() == '':
+                        continue
+                if self.grouping_mode == 'categorical' and cat_group_idx != -1:
+                    if cat_group_idx >= len(row) or str(row[cat_group_idx]).strip() == '':
                         continue
 
                 target_container = kml
                 assigned_group = None
                 kml_object = None
 
-                if grouping_active and num_group_idx != -1 and num_group_idx < len(row):
-                    try:
-                        value = float(str(row[num_group_idx]).replace(',', '.'))
-                        for group in self.groups:
-                            lower, upper = group['range']
-                            if (lower <= value < upper) or (group == self.groups[-1] and np.isclose(value, upper)):
-                                target_container = kml_folders[group['label']]
-                                assigned_group = group
-                                break
-                    except (ValueError, TypeError, IndexError):
-                        pass
+                if grouping_active:
+                    if self.grouping_mode == 'numerical' and num_group_idx != -1 and num_group_idx < len(row):
+                        try:
+                            value = float(str(row[num_group_idx]).replace(',', '.'))
+                            for group in self.groups:
+                                lower, upper = group['range']
+                                if (lower <= value < upper) or (group == self.groups[-1] and np.isclose(value, upper)):
+                                    target_container = kml_folders[group['label']]
+                                    assigned_group = group
+                                    break
+                        except (ValueError, TypeError, IndexError):
+                            pass
+                    elif self.grouping_mode == 'categorical' and cat_group_idx != -1 and cat_group_idx < len(row):
+                        val = str(row[cat_group_idx])
+                        if val in kml_folders:
+                            target_container = kml_folders[val]
+                            assigned_group = {'label': val}
 
                 label_text = ''
                 if self.kml_label_field_combo.isVisible() and label_idx != -1 and label_idx < len(row):
@@ -930,7 +983,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.field_types[field_name] = inferred_type
             
         self.update_field_combos()
-        self.on_numerical_grouping_field_changed()
+        if self.grouping_mode == 'numerical':
+            self.on_numerical_grouping_field_changed()
+        else:
+            self.on_categorical_grouping_field_changed()
         
     def _infer_field_types_for_column(self, column_index):
         """
@@ -994,7 +1050,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         and inferred field types.
         """
         if not self.data and not self.headers:
-            for combo in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.numerical_group_field_combo, self.kml_label_field_combo]:
+            for combo in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
+                          self.numerical_group_field_combo, self.categorical_group_field_combo,
+                          self.kml_label_field_combo]:
                 combo.clear()
             return
 
@@ -1002,8 +1060,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         all_fields = self.headers[:]
         
         numerical_fields = [field for field in all_fields if self.field_types.get(field) in ['int', 'float']]
+        categorical_fields = [f for f in all_fields if f not in numerical_fields]
 
-        combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.numerical_group_field_combo, self.kml_label_field_combo]
+        combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
+                  self.numerical_group_field_combo, self.categorical_group_field_combo,
+                  self.kml_label_field_combo]
         current_texts = [c.currentText() for c in combos]
 
         for c in combos:
@@ -1012,6 +1073,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for c in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.kml_label_field_combo]:
             c.addItems(all_fields)
         self.numerical_group_field_combo.addItems(numerical_fields)
+        self.categorical_group_field_combo.addItems(categorical_fields)
 
         if current_texts[0] in all_fields:
             self.wkt_field_combo.setCurrentText(current_texts[0])
@@ -1027,9 +1089,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         else:
             self.numerical_group_field_combo.setCurrentText('')
 
+        if current_texts[4] in categorical_fields:
+            self.categorical_group_field_combo.setCurrentText(current_texts[4])
+        elif categorical_fields:
+            self.categorical_group_field_combo.setCurrentText(categorical_fields[0])
+        else:
+            self.categorical_group_field_combo.setCurrentText('')
 
-        if current_texts[4] in all_fields:
-            self.kml_label_field_combo.setCurrentText(current_texts[4])
+        if current_texts[5] in all_fields:
+            self.kml_label_field_combo.setCurrentText(current_texts[5])
         elif all_fields:
             self.kml_label_field_combo.setCurrentText(all_fields[0])
 
@@ -1092,7 +1160,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
                 return
         self.preview_data()
-        self.on_numerical_grouping_field_changed()
+        if self.grouping_mode == 'numerical':
+            self.on_numerical_grouping_field_changed()
+        else:
+            self.on_categorical_grouping_field_changed()
 
 
     def preview_data(self):
@@ -1163,6 +1234,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         is_checked = self.use_custom_icon_checkbox.isChecked()
         self.icon_url_label.setVisible(is_checked)
         self.icon_url_input.setVisible(is_checked)
+
+    def on_grouping_mode_changed(self):
+        """Switch between numerical and categorical grouping modes."""
+        numerical = self.numeric_mode_radio.isChecked()
+        self.grouping_mode = 'numerical' if numerical else 'categorical'
+
+        for w in [self.numerical_group_label, self.numerical_group_field_combo,
+                   self.num_groups_label, self.num_groups_spinbox,
+                   self.end_color_label, self.end_color_button,
+                   self.numerical_color_label]:
+            w.setVisible(numerical)
+
+        self.categorical_group_label.setVisible(not numerical)
+        self.categorical_group_field_combo.setVisible(not numerical)
+        self.categorical_color_label.setVisible(not numerical)
+
+        if numerical:
+            self.on_numerical_grouping_field_changed()
+        else:
+            self.on_categorical_grouping_field_changed()
     
     def pick_end_color(self):
         """Открывает диалог выбора цвета для конечного цвета градиента."""
@@ -1170,11 +1261,50 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if color.isValid():
             self.end_color = color
             self.update_end_color_button()
-            self.on_numerical_grouping_field_changed()
+            if self.grouping_mode == 'numerical':
+                self.on_numerical_grouping_field_changed()
 
     def update_end_color_button(self):
         """Обновляет цвет кнопки, отображающей конечный цвет."""
         self.end_color_button.setStyleSheet(f"background-color: {self.end_color.name()}; border: 1px solid #888888;")
+
+    def on_categorical_grouping_field_changed(self):
+        """Rebuild groups based on unique categorical values."""
+        self.groups = []
+        self.group_colors = {}
+
+        selected_field = self.categorical_group_field_combo.currentText()
+        if not selected_field or not self.filtered_data or selected_field not in self.headers:
+            self.update_group_display()
+            return
+
+        col_index = self.headers.index(selected_field)
+        values = []
+        for row in self.filtered_data:
+            if col_index < len(row):
+                val = str(row[col_index]).strip()
+                if val != '':
+                    values.append(val)
+
+        unique_vals = sorted(set(values))
+        n = len(unique_vals)
+        for i, val in enumerate(unique_vals):
+            hue = (i * 360 / max(1, n)) / 360
+            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
+            color = QColor(r, g, b)
+            self.groups.append({'label': val, 'value': val, 'color': color})
+            self.group_colors[val] = color
+
+        self.update_group_display()
+
+    def pick_category_color(self, index):
+        """Allow manual selection of a category color."""
+        current = self.groups[index]['color']
+        color = QColorDialog.getColor(current, self, "Select Color")
+        if color.isValid():
+            self.groups[index]['color'] = color
+            self.group_colors[self.groups[index]['label']] = color
+            self.update_group_display()
 
     def on_numerical_grouping_field_changed(self):
         """
@@ -1317,73 +1447,89 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.update_group_display()
 
     def update_group_display(self):
-        """
-        Updates the display of numerical groups, their colors, and item counts.
-        Dynamically creates QLineEdit for bounds and QLabel for counts.
-        """
-        while self.numerical_color_display_layout.count() > 1:
-            child = self.numerical_color_display_layout.takeAt(1)
-            if child.widget():
-                child.widget().deleteLater()
-            elif child.layout():
-                self.clear_layout(child.layout())
+        """Update the displayed grouping information for the current mode."""
+        num_layout = self.numerical_color_display_layout
+        cat_layout = self.categorical_color_display_layout
+
+        for layout in (num_layout, cat_layout):
+            while layout.count() > 1:
+                child = layout.takeAt(1)
+                if child.widget():
+                    child.widget().deleteLater()
+                elif child.layout():
+                    self.clear_layout(child.layout())
 
         if not self.groups:
-            no_groups_label = QLabel("No numerical groups defined or data unavailable.")
-            no_groups_label.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
-            self.numerical_color_display_layout.addWidget(no_groups_label)
+            lbl = QLabel("No groups defined or data unavailable.")
+            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
+            (cat_layout if self.grouping_mode == 'categorical' else num_layout).addWidget(lbl)
             return
 
-        selected_field = self.numerical_group_field_combo.currentText()
-        numerical_values = []
-        if selected_field and self.filtered_data and self.headers and selected_field in self.headers:
-            col_index = self.headers.index(selected_field)
-            for row in self.filtered_data:
-                if col_index < len(row):
-                    try:
-                        numerical_values.append(float(str(row[col_index]).replace(',', '.')))
-                    except (ValueError, TypeError):
-                        pass
+        if self.grouping_mode == 'numerical':
+            selected_field = self.numerical_group_field_combo.currentText()
+            numerical_values = []
+            if selected_field and self.filtered_data and self.headers and selected_field in self.headers:
+                col_index = self.headers.index(selected_field)
+                for row in self.filtered_data:
+                    if col_index < len(row):
+                        try:
+                            numerical_values.append(float(str(row[col_index]).replace(',', '.')))
+                        except (ValueError, TypeError):
+                            pass
 
-        for i, group in enumerate(self.groups):
-            group_layout = QHBoxLayout()
-            color_swatch = QLabel()
-            color_swatch.setFixedSize(20, 20)
-            color_swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
-            group_layout.addWidget(color_swatch)
+            for i, group in enumerate(self.groups):
+                g_layout = QHBoxLayout()
+                swatch = QLabel()
+                swatch.setFixedSize(20, 20)
+                swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
+                g_layout.addWidget(swatch)
 
-            lower_bound_label = QLabel(f"{group['range'][0]:.2f} - ")
-            lower_bound_label.setStyleSheet("QLabel { color: #333333;}")
-            group_layout.addWidget(lower_bound_label)
+                lower_label = QLabel(f"{group['range'][0]:.2f} - ")
+                lower_label.setStyleSheet("QLabel { color: #333333;}")
+                g_layout.addWidget(lower_label)
 
-            upper_bound_input = QLineEdit(f"{group['range'][1]:.2f}")
-            upper_bound_input.setFixedWidth(80)
-            upper_bound_input.setStyleSheet("QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }")
-            
-            if i == len(self.groups) - 1:
-                upper_bound_input.setReadOnly(True)
-                upper_bound_input.setStyleSheet("QLineEdit { background-color: #E0E0E0; border: 1px solid #CCCCCC; padding: 3px; color: #888888; }")
-            else:
-                upper_bound_input.editingFinished.connect(lambda idx=i, sender=upper_bound_input: self.on_group_bound_edited(idx, sender))
-            
-            group_layout.addWidget(upper_bound_input)
+                upper_input = QLineEdit(f"{group['range'][1]:.2f}")
+                upper_input.setFixedWidth(80)
+                upper_input.setStyleSheet("QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }")
 
-            item_count = 0
-            lower, upper = group['range']
-            for val in numerical_values:
                 if i == len(self.groups) - 1:
-                    if lower <= val <= upper:
-                        item_count += 1
+                    upper_input.setReadOnly(True)
+                    upper_input.setStyleSheet("QLineEdit { background-color: #E0E0E0; border: 1px solid #CCCCCC; padding: 3px; color: #888888; }")
                 else:
-                    if lower <= val < upper:
-                        item_count += 1
-            
-            count_label = QLabel(f" ({item_count} items)")
-            count_label.setStyleSheet("QLabel { color: #555555;font-size: 9px; }")
-            group_layout.addWidget(count_label)
-            
-            group_layout.addStretch(1)
-            self.numerical_color_display_layout.addLayout(group_layout)
+                    upper_input.editingFinished.connect(lambda idx=i, sender=upper_input: self.on_group_bound_edited(idx, sender))
+
+                g_layout.addWidget(upper_input)
+
+                item_count = 0
+                lower, upper = group['range']
+                for val in numerical_values:
+                    if i == len(self.groups) - 1:
+                        if lower <= val <= upper:
+                            item_count += 1
+                    else:
+                        if lower <= val < upper:
+                            item_count += 1
+
+                count_label = QLabel(f" ({item_count} items)")
+                count_label.setStyleSheet("QLabel { color: #555555;font-size: 9px; }")
+                g_layout.addWidget(count_label)
+
+                g_layout.addStretch(1)
+                num_layout.addLayout(g_layout)
+        else:
+            for i, group in enumerate(self.groups):
+                g_layout = QHBoxLayout()
+                swatch = QLabel()
+                swatch.setFixedSize(20, 20)
+                swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
+                swatch.mousePressEvent = lambda e, idx=i: self.pick_category_color(idx)
+                g_layout.addWidget(swatch)
+
+                lbl = QLabel(group['label'])
+                lbl.setStyleSheet("QLabel { color: #333333; }")
+                g_layout.addWidget(lbl)
+                g_layout.addStretch(1)
+                cat_layout.addLayout(g_layout)
 
     def clear_layout(self, layout):
         """
