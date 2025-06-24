@@ -460,9 +460,17 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         grouping_options_layout.addLayout(self.numerical_color_display_layout)
         layout.addWidget(self.numerical_group_box)
 
+
         self.category_group_widget = QWidget()
         category_layout = QVBoxLayout(self.category_group_widget)
         category_layout.setContentsMargins(10, 15, 10, 15)
+
+        self.category_group_box = QGroupBox("Categorical Grouping")
+        self.category_group_box.setFont(bold_large_font)
+        category_layout = QVBoxLayout()
+        category_layout.setContentsMargins(10, 15, 10, 15)
+        self.category_group_box.setLayout(category_layout)
+
         category_field_layout = QHBoxLayout()
         self.category_group_label = QLabel('Category Field:')
         self.category_group_label.setStyleSheet(label_style)
@@ -477,7 +485,32 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.category_color_label.setStyleSheet(label_style)
         self.category_color_display_layout.addWidget(self.category_color_label)
         category_layout.addLayout(self.category_color_display_layout)
+
         layout.addWidget(self.category_group_widget)
+
+        layout.addWidget(self.category_group_box)
+
+        category_group_box = QGroupBox("Categorical Grouping")
+        category_group_box.setFont(bold_large_font)
+        category_layout = QVBoxLayout()
+        category_layout.setContentsMargins(10, 15, 10, 15)
+        category_group_box.setLayout(category_layout)
+        category_field_layout = QHBoxLayout()
+        self.category_group_label = QLabel('Category Field:')
+        self.category_group_label.setStyleSheet(label_style)
+        category_field_layout.addWidget(self.category_group_label)
+        self.category_group_field_combo = QComboBox()
+        self.category_group_field_combo.currentIndexChanged.connect(self.on_category_grouping_field_changed)
+        self.category_group_field_combo.setStyleSheet(combobox_style)
+        category_field_layout.addWidget(self.category_group_field_combo)
+        category_layout.addLayout(category_field_layout)
+        self.category_color_display_layout = QVBoxLayout()
+        self.category_color_label = QLabel('Category Colors:')
+        self.category_color_label.setStyleSheet(label_style)
+        self.category_color_display_layout.addWidget(self.category_color_label)
+        category_layout.addLayout(self.category_color_display_layout)
+        layout.addWidget(category_group_box)
+
 
         # Data filtering controls
         filter_group_box = QGroupBox("Data Filtering")
@@ -679,10 +712,18 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         kml_folders = {}
+
         use_range = self.range_mode_radio.isChecked()
         use_categories = self.category_mode_radio.isChecked()
         num_active = use_range and num_group_idx != -1 and self.groups
         cat_active = use_categories and cat_group_idx != -1 and self.category_groups
+
+
+
+        num_active = num_group_idx != -1 and self.groups
+        cat_active = cat_group_idx != -1 and self.category_groups
+
+
         grouping_active = num_active or cat_active
         if num_active:
             for group in self.groups:
@@ -1256,11 +1297,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         """Show/hide grouping option panels based on selected mode."""
         using_range = self.range_mode_radio.isChecked()
         self.numerical_group_box.setVisible(using_range)
+
         self.category_group_widget.setVisible(not using_range)
         self.numerical_group_field_combo.setEnabled(using_range)
         self.num_groups_spinbox.setEnabled(using_range)
         self.end_color_button.setEnabled(using_range)
         self.category_group_field_combo.setEnabled(not using_range)
+
+        self.category_group_box.setVisible(not using_range)
+
     
     def pick_end_color(self):
         """Открывает диалог выбора цвета для конечного цвета градиента."""
@@ -1539,11 +1584,20 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         for group in self.category_groups:
             group_layout = QHBoxLayout()
+
             color_btn = QPushButton()
             color_btn.setFixedSize(20, 20)
             color_btn.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
             color_btn.clicked.connect(lambda _, v=group['value']: self.pick_category_color(v))
             group_layout.addWidget(color_btn)
+
+
+            color_swatch = QLabel()
+            color_swatch.setFixedSize(20, 20)
+            color_swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
+            group_layout.addWidget(color_swatch)
+
+
 
             name_label = QLabel(str(group['value']))
             name_label.setStyleSheet("QLabel { color: #333333; }")
