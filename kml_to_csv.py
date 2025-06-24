@@ -740,7 +740,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 target_container = kml
                 assigned_group = None
-                kml_object = None
 
                 if grouping_active:
                     if self.grouping_mode == 'numerical' and num_group_idx != -1 and num_group_idx < len(row):
@@ -764,16 +763,28 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if self.kml_label_field_combo.isVisible() and label_idx != -1 and label_idx < len(row):
                     label_text = str(row[label_idx])
 
+                kml_objects = []
+
                 if use_wkt:
                     if wkt_idx != -1 and wkt_idx < len(row):
                         try:
                             geom = wkt.loads(str(row[wkt_idx]))
                             if geom.geom_type == 'Point':
-                                kml_object = target_container.newpoint(name=label_text, coords=[(geom.x, geom.y)])
+                                kml_objects.append(target_container.newpoint(name=label_text, coords=[(geom.x, geom.y)]))
                             elif geom.geom_type == 'LineString':
-                                kml_object = target_container.newlinestring(name=label_text, coords=list(geom.coords))
+                                kml_objects.append(target_container.newlinestring(name=label_text, coords=list(geom.coords)))
                             elif geom.geom_type == 'Polygon':
-                                kml_object = target_container.newpolygon(name=label_text, outerboundaryis=list(geom.exterior.coords))
+                                poly = target_container.newpolygon(name=label_text, outerboundaryis=list(geom.exterior.coords),
+                                                                  innerboundaryis=[list(r.coords) for r in geom.interiors])
+                                kml_objects.append(poly)
+                            elif geom.geom_type == 'MultiPolygon':
+                                for poly_geom in geom.geoms:
+                                    poly = target_container.newpolygon(
+                                        name=label_text,
+                                        outerboundaryis=list(poly_geom.exterior.coords),
+                                        innerboundaryis=[list(r.coords) for r in poly_geom.interiors]
+                                    )
+                                    kml_objects.append(poly)
                         except Exception as e:
                             print(f"Row {i+1} WKT Error: {e}"); continue
                 else:
@@ -781,24 +792,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                         try:
                             lon = float(str(row[lon_idx]).replace(',', '.'))
                             lat = float(str(row[lat_idx]).replace(',', '.'))
-                            kml_object = target_container.newpoint(name=label_text, coords=[(lon, lat)])
+                            kml_objects.append(target_container.newpoint(name=label_text, coords=[(lon, lat)]))
                         except (ValueError, TypeError):
                             print(f"Row {i+1} Lon/Lat Error"); continue
 
-                if not kml_object:
+                if not kml_objects:
                     continue
 
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
                     if color:
                         kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue())
-                        if isinstance(kml_object, simplekml.Point):
-                            kml_object.style.iconstyle.color = kml_color
-                        elif isinstance(kml_object, simplekml.LineString):
-                            kml_object.style.linestyle.color = kml_color
-                        elif isinstance(kml_object, simplekml.Polygon):
-                            kml_object.style.polystyle.color = kml_color
-                            kml_object.style.linestyle.color = kml_color
+                        for obj in kml_objects:
+                            if isinstance(obj, simplekml.Point):
+                                obj.style.iconstyle.color = kml_color
+                            elif isinstance(obj, simplekml.LineString):
+                                obj.style.linestyle.color = kml_color
+                            elif isinstance(obj, simplekml.Polygon):
+                                obj.style.polystyle.color = kml_color
+                                obj.style.linestyle.color = kml_color
 
                 # Build description snippet
                 desc_fields = self.description_fields_combo.checkedItems()
@@ -811,28 +823,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             value = row[idx]
                         lines.append(f"<b>{field}</b>: {value}")
                     snippet_html = "<br>".join(lines)
-                    try:
-                        kml_object.snippet = simplekml.Snippet(snippet_html, maxlines=len(lines))
-                    except Exception:
-                        kml_object.snippet = snippet_html
+                    for obj in kml_objects:
+                        try:
+                            obj.snippet = simplekml.Snippet(snippet_html, maxlines=len(lines))
+                        except Exception:
+                            obj.snippet = snippet_html
 
-                    # Show description on click
-                    kml_object.description = snippet_html
-
-
-
-                    # Show description on click
-                    kml_object.description = snippet_html
+                        # Show description on click
+                        obj.description = snippet_html
 
 
 
-                if isinstance(kml_object, simplekml.Point):
-                    use_custom_icon = self.use_custom_icon_checkbox.isChecked()
-                    custom_icon_url = self.icon_url_input.text()
-                    if use_custom_icon and custom_icon_url:
-                        kml_object.style.iconstyle.icon.href = custom_icon_url
-                    else:
-                        kml_object.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png' # Changed default icon URL
+                for obj in kml_objects:
+                    if isinstance(obj, simplekml.Point):
+                        use_custom_icon = self.use_custom_icon_checkbox.isChecked()
+                        custom_icon_url = self.icon_url_input.text()
+                        if use_custom_icon and custom_icon_url:
+                            obj.style.iconstyle.icon.href = custom_icon_url
+                        else:
+                            obj.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'  # Changed default icon URL
             kml.save(output_file)
             QMessageBox.information(self, "KML Generated", f"KML-файл '{output_file}' успешно создан!")
         except Exception as e:
