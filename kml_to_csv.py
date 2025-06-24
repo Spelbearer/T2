@@ -221,17 +221,24 @@ class KmlGeneratorApp(QWidget):
         self.setGeometry(100, 100, 950, 850)
 
         self.setStyleSheet("""
-            QWidget { background-color: #F8F8F8;
-font-family: Arial; }
+            QWidget {
+                background-color: #FAFAFA;
+                font-family: Arial;
+            }
             QGroupBox {
-                border: 1px solid #D0D0D0;
-border-radius: 7px; margin-top: 10px;
-                padding-top: 15px; background-color: #FFFFFF;
+                border: 1px solid #CCCCCC;
+                border-radius: 7px;
+                margin-top: 10px;
+                padding-top: 15px;
+                background-color: #FFFFFF;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-left: 10px; padding: 0 5px;
-                color: #333333; font-weight: bold; font-size: 11px;
+                left: 10px;
+                padding: 0 5px;
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
             }
             QScrollArea {
                 border: none;
@@ -241,7 +248,11 @@ left: 10px; padding: 0 5px;
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         main_container = QWidget()
-        layout = QVBoxLayout(main_container)
+        main_layout = QHBoxLayout(main_container)
+        left_layout = QVBoxLayout()
+        right_layout = QVBoxLayout()
+        main_layout.addLayout(left_layout)
+        main_layout.addLayout(right_layout)
         main_app_layout = QVBoxLayout(self)
         main_app_layout.addWidget(scroll_area)
         self.setLayout(main_app_layout)
@@ -250,9 +261,12 @@ left: 10px; padding: 0 5px;
         bold_large_font.setPointSize(10)
         bold_large_font.setBold(True)
 
-        label_style = "QLabel { color: #333333;font-weight: bold;}"
-        button_style = "QPushButton { background-color: #555555; color: white; border-radius: 5px;padding: 5px 10px;font-weight: bold; }"
-        button_hover_style = "QPushButton:hover { background-color: #777777}"
+        label_style = "QLabel { color: #333333; font-weight: bold; }"
+        button_style = (
+            "QPushButton { background-color: #E0E0E0; color: #333333;"
+            " border-radius: 5px; padding: 5px 10px; font-weight: bold; }"
+        )
+        button_hover_style = "QPushButton:hover { background-color: #CCCCCC }"
         lineedit_style = "QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
         combobox_style = "QComboBox { background-color: #EEEEEE;border: 1px solid #CCCCCC; padding: 1px; }"
         spinbox_style = "QSpinBox { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
@@ -343,7 +357,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         encoding_layout.addWidget(self.utf8_radio)
         encoding_layout.addWidget(self.cp1251_radio)
         file_group_layout.addLayout(encoding_layout)
-        layout.addWidget(file_group_box)
+        left_layout.addWidget(file_group_box)
         
         coord_group_box = QGroupBox("Coordinate and KML Settings")
         coord_group_box.setFont(bold_large_font)
@@ -441,7 +455,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         coord_layout.addLayout(self.icon_url_layout)
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
-        layout.addWidget(coord_group_box)
+        left_layout.addWidget(coord_group_box)
         
         self.on_coord_system_changed() 
 
@@ -535,7 +549,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
-        layout.addWidget(grouping_group_box)
+        left_layout.addWidget(grouping_group_box)
 
         # Data filtering controls
         filter_group_box = QGroupBox("Data Filtering")
@@ -553,20 +567,22 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.apply_filter_button.clicked.connect(self.apply_filter)
         filter_layout.addWidget(self.apply_filter_button)
         filter_group_box.setLayout(filter_layout)
-        layout.addWidget(filter_group_box)
+        right_layout.addWidget(filter_group_box)
 
         self.data_table = QTableWidget()
         self.data_table.setMinimumHeight(300)
         self.data_table.setStyleSheet(table_style)
         self.data_table.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
-        layout.addWidget(self.data_table)
+        right_layout.addWidget(self.data_table)
 
         self.generate_button = QPushButton('Generate KML')
         self.generate_button.clicked.connect(self.generate_kml)
         self.generate_button.setStyleSheet(button_style + button_hover_style)
-        layout.addWidget(self.generate_button)
+        right_layout.addWidget(self.generate_button)
 
-        main_container.setLayout(layout)
+        left_layout.addStretch()
+        right_layout.addStretch()
+        main_container.setLayout(main_layout)
         scroll_area.setWidget(main_container)
 
     def update_file_options_state(self, is_excel):
