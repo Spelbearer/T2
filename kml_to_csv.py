@@ -206,6 +206,7 @@ class KmlGeneratorApp(QWidget):
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
         self.grouping_mode = 'numerical'
+        self.group_opacity = 100
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
         self.current_header_combo_column = -1 # Track which column the combo belongs to
 
@@ -491,6 +492,19 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.end_color_button.setFixedSize(20, 20)
         end_color_layout.addWidget(self.end_color_button)
         grouping_options_layout.addLayout(end_color_layout)
+
+        opacity_layout = QHBoxLayout()
+        self.opacity_label = QLabel('Group Opacity (%):')
+        self.opacity_label.setStyleSheet(label_style)
+        opacity_layout.addWidget(self.opacity_label)
+        self.opacity_spinbox = QSpinBox()
+        self.opacity_spinbox.setMinimum(0)
+        self.opacity_spinbox.setMaximum(100)
+        self.opacity_spinbox.setValue(100)
+        self.opacity_spinbox.setStyleSheet(spinbox_style)
+        self.opacity_spinbox.valueChanged.connect(self.on_opacity_changed)
+        opacity_layout.addWidget(self.opacity_spinbox)
+        grouping_options_layout.addLayout(opacity_layout)
         self.update_end_color_button()
         self.numerical_color_display_layout = QVBoxLayout()
         self.numerical_color_label = QLabel('Numerical Group Ranges and Colors:')
@@ -802,7 +816,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
                     if color:
+
+                        alpha = int(255 * (self.group_opacity / 100))
+                        kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue(), alpha)
+
                         kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue())
+
                         for obj in kml_objects:
                             if isinstance(obj, simplekml.Point):
                                 obj.style.iconstyle.color = kml_color
@@ -1371,6 +1390,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.update_end_color_button()
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
+
+    def on_opacity_changed(self):
+        """Update stored group opacity when the spinbox value changes."""
+        self.group_opacity = self.opacity_spinbox.value()
 
     def update_end_color_button(self):
         """Обновляет цвет кнопки, отображающей конечный цвет."""
