@@ -820,6 +820,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     kml_object.description = snippet_html
 
 
+
+                    # Show description on click
+                    kml_object.description = snippet_html
+
+
+
                 if isinstance(kml_object, simplekml.Point):
                     use_custom_icon = self.use_custom_icon_checkbox.isChecked()
                     custom_icon_url = self.icon_url_input.text()
@@ -1142,6 +1148,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         current_texts = [c.currentText() for c in combos]
         selected_desc = set(self.description_fields_combo.checkedItems())
 
+
+        # Prevent signals from firing while repopulating combos
+        for c in combos + [self.description_fields_combo]:
+            c.blockSignals(True)
+
+
         for c in combos:
             c.clear()
 
@@ -1183,6 +1195,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.kml_label_field_combo.setCurrentText(current_texts[5])
         elif all_fields:
             self.kml_label_field_combo.setCurrentText(all_fields[0])
+
+        # Re-enable signals now that combo boxes are populated
+        for c in combos + [self.description_fields_combo]:
+            c.blockSignals(False)
 
 
     def apply_filter(self):
