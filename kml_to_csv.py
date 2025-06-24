@@ -816,6 +816,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     except Exception:
                         kml_object.snippet = snippet_html
 
+                    # Show description on click
+                    kml_object.description = snippet_html
+
+
                 if isinstance(kml_object, simplekml.Point):
                     use_custom_icon = self.use_custom_icon_checkbox.isChecked()
                     custom_icon_url = self.icon_url_input.text()
