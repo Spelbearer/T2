@@ -222,6 +222,15 @@ class KmlGeneratorApp(QWidget):
 
         self.setStyleSheet("""
             QWidget {
+                background-color: #F2F2F7;
+                font-family: 'Helvetica Neue', Arial, sans-serif;
+            }
+            QGroupBox {
+                border: 1px solid #E5E5EA;
+                border-radius: 8px;
+                margin-top: 15px;
+                padding-top: 20px;
+
                 background-color: #FAFAFA;
                 font-family: Arial;
             }
@@ -236,9 +245,15 @@ class KmlGeneratorApp(QWidget):
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
+
+                color: #1C1C1E;
+                font-weight: 600;
+                font-size: 12px;
+
                 color: #333333;
                 font-weight: bold;
                 font-size: 11px;
+
             }
             QScrollArea {
                 border: none;
@@ -249,8 +264,17 @@ class KmlGeneratorApp(QWidget):
         scroll_area.setWidgetResizable(True)
         main_container = QWidget()
         main_layout = QHBoxLayout(main_container)
+
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(30)
+        left_layout = QVBoxLayout()
+        left_layout.setSpacing(20)
+        right_layout = QVBoxLayout()
+        right_layout.setSpacing(20)
+
         left_layout = QVBoxLayout()
         right_layout = QVBoxLayout()
+
         main_layout.addLayout(left_layout)
         main_layout.addLayout(right_layout)
         main_app_layout = QVBoxLayout(self)
@@ -258,8 +282,21 @@ class KmlGeneratorApp(QWidget):
         self.setLayout(main_app_layout)
 
         bold_large_font = QFont()
-        bold_large_font.setPointSize(10)
+        bold_large_font.setPointSize(11)
         bold_large_font.setBold(True)
+
+
+        label_style = "QLabel { color: #1C1C1E; font-weight: 600; }"
+        button_style = (
+            "QPushButton { background-color: #007AFF; color: white;"
+            " border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
+        )
+        button_hover_style = "QPushButton:hover { background-color: #0051d4; }"
+        lineedit_style = "QLineEdit { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 4px; border-radius: 4px; }"
+        combobox_style = "QComboBox { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 2px; border-radius: 4px; }"
+        spinbox_style = "QSpinBox { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 4px; border-radius: 4px; }"
+        checkbox_style = "QCheckBox { color: #1C1C1E; font-weight: 600; }"
+        radio_button_style = "QRadioButton { color: #1C1C1E; font-weight: 600; }"
 
         label_style = "QLabel { color: #333333; font-weight: bold; }"
         button_style = (
@@ -272,11 +309,10 @@ class KmlGeneratorApp(QWidget):
         spinbox_style = "QSpinBox { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
         checkbox_style = "QCheckBox { color: #333333;font-weight: bold;}"
         radio_button_style = "QRadioButton { color: #333333;font-weight: bold;}"
+
         table_style = """
-            QTableWidget { background-color: #FFFFFF; border: 1px solid #CCCCCC; gridline-color: #E0E0E0;
-}
-            QHeaderView::section { background-color: #E0E0E0; color: #333333; padding: 4px;
-border: 1px solid #CCCCCC; font-weight: bold; }
+            QTableWidget { background-color: #FFFFFF; border: 1px solid #E5E5EA; gridline-color: #E5E5EA; }
+            QHeaderView::section { background-color: #F2F2F7; color: #1C1C1E; padding: 4px; border: 1px solid #E5E5EA; font-weight: 600; }
         """
 
 
