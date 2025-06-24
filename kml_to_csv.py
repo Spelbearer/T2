@@ -91,6 +91,19 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
+
+def generate_distinct_colors(n: int) -> list[QColor]:
+    """Generate a list of visually distinct QColor objects."""
+    colors = []
+    if n <= 0:
+        return colors
+    for i in range(n):
+        hue = int(360 * i / n) % 360
+        color = QColor()
+        color.setHsv(hue, 200, 255)
+        colors.append(color)
+    return colors
+
     col, op, val = match.group(1), match.group(2), match.group(3)
     if re.fullmatch(r'-?\d+(\.\d+)?', val):
         return f"{col}{op}{val}"
@@ -156,10 +169,12 @@ class KmlGeneratorApp(QWidget):
         self.headers = []
         self.group_colors = {}
         self.groups = []
+        self.category_groups = []
         self.end_color = QColor(255, 0, 0)
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
+        self.category_group_colors = {}
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
         self.current_header_combo_column = -1 # Track which column the combo belongs to
 
@@ -382,14 +397,31 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
         layout.addWidget(coord_group_box)
-        
-        self.on_coord_system_changed() 
 
-        grouping_group_box = QGroupBox("Numerical Grouping Settings")
-        grouping_group_box.setFont(bold_large_font)
+        self.on_coord_system_changed()
+
+        # Grouping mode selection (range vs categories)
+        grouping_mode_layout = QHBoxLayout()
+        self.group_mode_group = QButtonGroup(self)
+        self.range_mode_radio = QRadioButton('Group by Range')
+        self.range_mode_radio.setChecked(True)
+        self.range_mode_radio.setStyleSheet(radio_button_style)
+        self.category_mode_radio = QRadioButton('Group by Categories')
+        self.category_mode_radio.setStyleSheet(radio_button_style)
+        self.group_mode_group.addButton(self.range_mode_radio)
+        self.group_mode_group.addButton(self.category_mode_radio)
+        grouping_mode_layout.addWidget(self.range_mode_radio)
+        grouping_mode_layout.addWidget(self.category_mode_radio)
+        grouping_mode_layout.addStretch(1)
+        self.range_mode_radio.toggled.connect(self.update_grouping_mode)
+        self.category_mode_radio.toggled.connect(self.update_grouping_mode)
+        layout.addLayout(grouping_mode_layout)
+
+        self.numerical_group_box = QGroupBox("Numerical Grouping Settings")
+        self.numerical_group_box.setFont(bold_large_font)
         grouping_options_layout = QVBoxLayout()
         grouping_options_layout.setContentsMargins(10, 15, 10, 15)
-        grouping_group_box.setLayout(grouping_options_layout)
+        self.numerical_group_box.setLayout(grouping_options_layout)
         numerical_field_selection_layout = QHBoxLayout()
         self.numerical_group_label = QLabel('Numerical Grouping Field:')
         self.numerical_group_label.setStyleSheet(label_style)
@@ -426,7 +458,28 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.numerical_color_label.setStyleSheet(label_style)
         self.numerical_color_display_layout.addWidget(self.numerical_color_label)
         grouping_options_layout.addLayout(self.numerical_color_display_layout)
-        layout.addWidget(grouping_group_box)
+        layout.addWidget(self.numerical_group_box)
+
+        self.category_group_box = QGroupBox("Categorical Grouping")
+        self.category_group_box.setFont(bold_large_font)
+        category_layout = QVBoxLayout()
+        category_layout.setContentsMargins(10, 15, 10, 15)
+        self.category_group_box.setLayout(category_layout)
+        category_field_layout = QHBoxLayout()
+        self.category_group_label = QLabel('Category Field:')
+        self.category_group_label.setStyleSheet(label_style)
+        category_field_layout.addWidget(self.category_group_label)
+        self.category_group_field_combo = QComboBox()
+        self.category_group_field_combo.currentIndexChanged.connect(self.on_category_grouping_field_changed)
+        self.category_group_field_combo.setStyleSheet(combobox_style)
+        category_field_layout.addWidget(self.category_group_field_combo)
+        category_layout.addLayout(category_field_layout)
+        self.category_color_display_layout = QVBoxLayout()
+        self.category_color_label = QLabel('Category Colors:')
+        self.category_color_label.setStyleSheet(label_style)
+        self.category_color_display_layout.addWidget(self.category_color_label)
+        category_layout.addLayout(self.category_color_display_layout)
+        layout.addWidget(self.category_group_box)
 
         # Data filtering controls
         filter_group_box = QGroupBox("Data Filtering")
@@ -459,6 +512,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         main_container.setLayout(layout)
         scroll_area.setWidget(main_container)
+        self.update_grouping_mode()
 
     def update_file_options_state(self, is_excel):
         """Включает или отключает опции файла в зависимости от его типа."""
@@ -583,6 +637,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.preview_data()
             self.update_field_combos()
             self.on_numerical_grouping_field_changed()
+            self.on_category_grouping_field_changed()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
@@ -616,6 +671,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
         num_group_idx = field_indices.get(self.numerical_group_field_combo.currentText(), -1)
+        cat_group_idx = field_indices.get(self.category_group_field_combo.currentText(), -1)
 
         if use_wkt and wkt_idx == -1:
             QMessageBox.critical(self, "Error", "Выбранное поле WKT не найдено.")
@@ -625,23 +681,39 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         kml_folders = {}
-        grouping_active = num_group_idx != -1 and self.groups
-        if grouping_active:
+        use_range = self.range_mode_radio.isChecked()
+        use_categories = self.category_mode_radio.isChecked()
+        num_active = use_range and num_group_idx != -1 and self.groups
+        cat_active = use_categories and cat_group_idx != -1 and self.category_groups
+        grouping_active = num_active or cat_active
+        if num_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
+        if cat_active:
+            for group in self.category_groups:
+                kml_folders[str(group['value'])] = kml.newfolder(name=str(group['value']))
 
         try:
             for i, row in enumerate(self.filtered_data):
-                # Skip rows where the selected numerical grouping field is empty
-                if num_group_idx != -1:
+                # Skip rows where selected grouping field is empty
+                if num_active and num_group_idx != -1:
                     if num_group_idx >= len(row) or str(row[num_group_idx]).strip() == '':
+                        continue
+                if cat_active and cat_group_idx != -1:
+                    if cat_group_idx >= len(row) or str(row[cat_group_idx]).strip() == '':
                         continue
 
                 target_container = kml
                 assigned_group = None
+                assigned_cat_color = None
                 kml_object = None
 
-                if grouping_active and num_group_idx != -1 and num_group_idx < len(row):
+                if cat_active and cat_group_idx != -1 and cat_group_idx < len(row):
+                    val = str(row[cat_group_idx]).strip()
+                    if val in kml_folders:
+                        target_container = kml_folders[val]
+                        assigned_cat_color = self.category_group_colors.get(val)
+                elif num_active and num_group_idx != -1 and num_group_idx < len(row):
                     try:
                         value = float(str(row[num_group_idx]).replace(',', '.'))
                         for group in self.groups:
@@ -681,17 +753,21 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if not kml_object:
                     continue
 
+                assigned_color = None
                 if assigned_group:
-                    color = self.group_colors.get(assigned_group['label'])
-                    if color:
-                        kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue())
-                        if isinstance(kml_object, simplekml.Point):
-                            kml_object.style.iconstyle.color = kml_color
-                        elif isinstance(kml_object, simplekml.LineString):
-                            kml_object.style.linestyle.color = kml_color
-                        elif isinstance(kml_object, simplekml.Polygon):
-                            kml_object.style.polystyle.color = kml_color
-                            kml_object.style.linestyle.color = kml_color
+                    assigned_color = self.group_colors.get(assigned_group['label'])
+                elif assigned_cat_color:
+                    assigned_color = assigned_cat_color
+
+                if assigned_color:
+                    kml_color = simplekml.Color.rgb(assigned_color.red(), assigned_color.green(), assigned_color.blue())
+                    if isinstance(kml_object, simplekml.Point):
+                        kml_object.style.iconstyle.color = kml_color
+                    elif isinstance(kml_object, simplekml.LineString):
+                        kml_object.style.linestyle.color = kml_color
+                    elif isinstance(kml_object, simplekml.Polygon):
+                        kml_object.style.polystyle.color = kml_color
+                        kml_object.style.linestyle.color = kml_color
 
                 if isinstance(kml_object, simplekml.Point):
                     use_custom_icon = self.use_custom_icon_checkbox.isChecked()
@@ -931,6 +1007,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             
         self.update_field_combos()
         self.on_numerical_grouping_field_changed()
+        self.on_category_grouping_field_changed()
         
     def _infer_field_types_for_column(self, column_index):
         """
@@ -1002,8 +1079,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         all_fields = self.headers[:]
         
         numerical_fields = [field for field in all_fields if self.field_types.get(field) in ['int', 'float']]
+        categorical_fields = [field for field in all_fields if self.field_types.get(field) not in ['int', 'float', 'geometry']]
 
-        combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.numerical_group_field_combo, self.kml_label_field_combo]
+        combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.numerical_group_field_combo, self.kml_label_field_combo, self.category_group_field_combo]
         current_texts = [c.currentText() for c in combos]
 
         for c in combos:
@@ -1012,6 +1090,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for c in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.kml_label_field_combo]:
             c.addItems(all_fields)
         self.numerical_group_field_combo.addItems(numerical_fields)
+        self.category_group_field_combo.addItems(categorical_fields)
 
         if current_texts[0] in all_fields:
             self.wkt_field_combo.setCurrentText(current_texts[0])
@@ -1032,6 +1111,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.kml_label_field_combo.setCurrentText(current_texts[4])
         elif all_fields:
             self.kml_label_field_combo.setCurrentText(all_fields[0])
+
+        if current_texts[5] in categorical_fields:
+            self.category_group_field_combo.setCurrentText(current_texts[5])
+        elif categorical_fields:
+            self.category_group_field_combo.setCurrentText(categorical_fields[0])
+        else:
+            self.category_group_field_combo.setCurrentText('')
+
+        self.on_numerical_grouping_field_changed()
+        self.on_category_grouping_field_changed()
 
 
     def apply_filter(self):
@@ -1093,6 +1182,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 return
         self.preview_data()
         self.on_numerical_grouping_field_changed()
+        self.on_category_grouping_field_changed()
 
 
     def preview_data(self):
@@ -1163,6 +1253,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         is_checked = self.use_custom_icon_checkbox.isChecked()
         self.icon_url_label.setVisible(is_checked)
         self.icon_url_input.setVisible(is_checked)
+
+    def update_grouping_mode(self):
+        """Show/hide grouping option panels based on selected mode."""
+        using_range = self.range_mode_radio.isChecked()
+        self.numerical_group_box.setVisible(using_range)
+        self.category_group_box.setVisible(not using_range)
     
     def pick_end_color(self):
         """Открывает диалог выбора цвета для конечного цвета градиента."""
@@ -1171,6 +1267,19 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.end_color = color
             self.update_end_color_button()
             self.on_numerical_grouping_field_changed()
+            self.on_category_grouping_field_changed()
+
+    def pick_category_color(self, value):
+        """Open a color dialog to set the color for a category value."""
+        current = self.category_group_colors.get(value, QColor())
+        color = QColorDialog.getColor(current, self, "Select Category Color")
+        if color.isValid():
+            self.category_group_colors[value] = color
+            for group in self.category_groups:
+                if group['value'] == value:
+                    group['color'] = color
+                    break
+            self.update_category_group_display()
 
     def update_end_color_button(self):
         """Обновляет цвет кнопки, отображающей конечный цвет."""
@@ -1384,6 +1493,62 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             
             group_layout.addStretch(1)
             self.numerical_color_display_layout.addLayout(group_layout)
+
+    def on_category_grouping_field_changed(self):
+        """Handle changes to the categorical grouping field."""
+        self.category_groups = []
+        self.category_group_colors = {}
+
+        selected_field = self.category_group_field_combo.currentText()
+        if not selected_field or not self.filtered_data or selected_field not in self.headers:
+            self.update_category_group_display()
+            return
+
+        col_index = self.headers.index(selected_field)
+        values = []
+        for row in self.filtered_data:
+            if col_index < len(row):
+                val = str(row[col_index]).strip()
+                if val != "":
+                    values.append(val)
+
+        unique_vals = sorted(set(values))[:100]
+        colors = generate_distinct_colors(len(unique_vals))
+        for val, color in zip(unique_vals, colors):
+            self.category_groups.append({"value": val, "color": color})
+            self.category_group_colors[val] = color
+
+        self.update_category_group_display()
+
+    def update_category_group_display(self):
+        """Update the categorical color preview layout."""
+        while self.category_color_display_layout.count() > 1:
+            child = self.category_color_display_layout.takeAt(1)
+            if child.widget():
+                child.widget().deleteLater()
+            elif child.layout():
+                self.clear_layout(child.layout())
+
+        if not self.category_groups:
+            no_groups_label = QLabel("No categories available.")
+            no_groups_label.setStyleSheet("QLabel { color: #555555;margin-left:10px; }")
+            self.category_color_display_layout.addWidget(no_groups_label)
+            return
+
+        for group in self.category_groups:
+            group_layout = QHBoxLayout()
+            color_btn = QPushButton()
+            color_btn.setFixedSize(20, 20)
+            color_btn.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
+            color_btn.clicked.connect(lambda _, v=group['value']: self.pick_category_color(v))
+            group_layout.addWidget(color_btn)
+
+            name_label = QLabel(str(group['value']))
+            name_label.setStyleSheet("QLabel { color: #333333; }")
+            group_layout.addWidget(name_label)
+
+            group_layout.addStretch(1)
+            self.category_color_display_layout.addLayout(group_layout)
 
     def clear_layout(self, layout):
         """
