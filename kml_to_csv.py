@@ -791,17 +791,35 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             elif geom.geom_type == 'LineString':
                                 kml_objects.append(target_container.newlinestring(name=label_text, coords=list(geom.coords)))
                             elif geom.geom_type == 'Polygon':
-                                poly = target_container.newpolygon(name=label_text, outerboundaryis=list(geom.exterior.coords),
-                                                                  innerboundaryis=[list(r.coords) for r in geom.interiors])
+                                poly = target_container.newpolygon(
+                                    name=label_text,
+                                    outerboundaryis=list(geom.exterior.coords),
+                                    innerboundaryis=[list(r.coords) for r in geom.interiors],
+                                )
                                 kml_objects.append(poly)
+                                if label_text:
+                                    pt = geom.representative_point()
+                                    label_point = target_container.newpoint(
+                                        name=label_text,
+                                        coords=[(pt.x, pt.y)],
+                                    )
+                                    kml_objects.append(label_point)
                             elif geom.geom_type == 'MultiPolygon':
+                                largest_poly = max(geom.geoms, key=lambda g: g.area)
+                                label_pt = largest_poly.representative_point() if label_text else None
                                 for poly_geom in geom.geoms:
                                     poly = target_container.newpolygon(
                                         name=label_text,
                                         outerboundaryis=list(poly_geom.exterior.coords),
-                                        innerboundaryis=[list(r.coords) for r in poly_geom.interiors]
+                                        innerboundaryis=[list(r.coords) for r in poly_geom.interiors],
                                     )
                                     kml_objects.append(poly)
+                                if label_text:
+                                    label_point = target_container.newpoint(
+                                        name=label_text,
+                                        coords=[(label_pt.x, label_pt.y)],
+                                    )
+                                    kml_objects.append(label_point)
                         except Exception as e:
                             print(f"Row {i+1} WKT Error: {e}"); continue
                 else:
