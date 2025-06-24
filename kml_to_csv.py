@@ -815,8 +815,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                         kml_object.snippet = simplekml.Snippet(snippet_html, maxlines=len(lines))
                     except Exception:
                         kml_object.snippet = snippet_html
+
                     # Show description on click
                     kml_object.description = snippet_html
+
+
+
+                    # Show description on click
+                    kml_object.description = snippet_html
+
+
 
                 if isinstance(kml_object, simplekml.Point):
                     use_custom_icon = self.use_custom_icon_checkbox.isChecked()
@@ -1140,9 +1148,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         current_texts = [c.currentText() for c in combos]
         selected_desc = set(self.description_fields_combo.checkedItems())
 
+
         # Prevent signals from firing while repopulating combos
         for c in combos + [self.description_fields_combo]:
             c.blockSignals(True)
+
 
         for c in combos:
             c.clear()
