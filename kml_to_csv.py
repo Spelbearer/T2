@@ -230,15 +230,30 @@ class KmlGeneratorApp(QWidget):
                 border-radius: 8px;
                 margin-top: 15px;
                 padding-top: 20px;
+
+                background-color: #FAFAFA;
+                font-family: Arial;
+            }
+            QGroupBox {
+                border: 1px solid #CCCCCC;
+                border-radius: 7px;
+                margin-top: 10px;
+                padding-top: 15px;
                 background-color: #FFFFFF;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 5px;
+
                 color: #1C1C1E;
                 font-weight: 600;
                 font-size: 12px;
+
+                color: #333333;
+                font-weight: bold;
+                font-size: 11px;
+
             }
             QScrollArea {
                 border: none;
@@ -249,12 +264,17 @@ class KmlGeneratorApp(QWidget):
         scroll_area.setWidgetResizable(True)
         main_container = QWidget()
         main_layout = QHBoxLayout(main_container)
+
         main_layout.setContentsMargins(20, 20, 20, 20)
         main_layout.setSpacing(30)
         left_layout = QVBoxLayout()
         left_layout.setSpacing(20)
         right_layout = QVBoxLayout()
         right_layout.setSpacing(20)
+
+        left_layout = QVBoxLayout()
+        right_layout = QVBoxLayout()
+
         main_layout.addLayout(left_layout)
         main_layout.addLayout(right_layout)
         main_app_layout = QVBoxLayout(self)
@@ -264,6 +284,7 @@ class KmlGeneratorApp(QWidget):
         bold_large_font = QFont()
         bold_large_font.setPointSize(11)
         bold_large_font.setBold(True)
+
 
         label_style = "QLabel { color: #1C1C1E; font-weight: 600; }"
         button_style = (
@@ -276,6 +297,19 @@ class KmlGeneratorApp(QWidget):
         spinbox_style = "QSpinBox { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 4px; border-radius: 4px; }"
         checkbox_style = "QCheckBox { color: #1C1C1E; font-weight: 600; }"
         radio_button_style = "QRadioButton { color: #1C1C1E; font-weight: 600; }"
+
+        label_style = "QLabel { color: #333333; font-weight: bold; }"
+        button_style = (
+            "QPushButton { background-color: #E0E0E0; color: #333333;"
+            " border-radius: 5px; padding: 5px 10px; font-weight: bold; }"
+        )
+        button_hover_style = "QPushButton:hover { background-color: #CCCCCC }"
+        lineedit_style = "QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
+        combobox_style = "QComboBox { background-color: #EEEEEE;border: 1px solid #CCCCCC; padding: 1px; }"
+        spinbox_style = "QSpinBox { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
+        checkbox_style = "QCheckBox { color: #333333;font-weight: bold;}"
+        radio_button_style = "QRadioButton { color: #333333;font-weight: bold;}"
+
         table_style = """
             QTableWidget { background-color: #FFFFFF; border: 1px solid #E5E5EA; gridline-color: #E5E5EA; }
             QHeaderView::section { background-color: #F2F2F7; color: #1C1C1E; padding: 4px; border: 1px solid #E5E5EA; font-weight: 600; }
