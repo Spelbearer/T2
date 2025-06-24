@@ -816,8 +816,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
                     if color:
+
                         alpha = int(255 * (self.group_opacity / 100))
                         kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue(), alpha)
+
+                        kml_color = simplekml.Color.rgb(color.red(), color.green(), color.blue())
+
                         for obj in kml_objects:
                             if isinstance(obj, simplekml.Point):
                                 obj.style.iconstyle.color = kml_color
