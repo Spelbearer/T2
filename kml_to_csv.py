@@ -213,10 +213,6 @@ class KmlGeneratorApp(QWidget):
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
         self.current_header_combo_column = -1 # Track which column the combo belongs to
 
-        # Flag and color for single-color mode when grouping by unique values
-        self.use_single_category_color = False
-        self.single_category_color = QColor(0, 0, 255)
-
         self.initUI()
 
     def initUI(self):
@@ -277,7 +273,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         file_group_box.setLayout(file_group_layout)
         
         file_layout = QHBoxLayout()
-        self.file_label = QLabel('Исходный файл:')
+        self.file_label = QLabel('Исходный файл (txt, csv, excel):')
         self.file_label.setStyleSheet(label_style)
         file_layout.addWidget(self.file_label)
         self.file_path_input = QLineEdit()
@@ -430,7 +426,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         desc_layout.addWidget(self.description_fields_combo)
         coord_layout.addLayout(desc_layout)
 
-        self.use_custom_icon_checkbox = QCheckBox('Использовать пользовательский иконку')
+        self.use_custom_icon_checkbox = QCheckBox('Использовать пользовательскую иконку')
         self.use_custom_icon_checkbox.setChecked(False)
         self.use_custom_icon_checkbox.stateChanged.connect(self.toggle_custom_icon_input)
         self.use_custom_icon_checkbox.setStyleSheet(checkbox_style)
@@ -530,31 +526,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         grouping_options_layout.addLayout(categorical_field_layout)
 
         self.categorical_color_display_layout = QVBoxLayout()
-        self.categorical_color_label = QLabel('Уникальный значения и цвета:')
+        self.categorical_color_label = QLabel('Уникальные значения и цвета:')
         self.categorical_color_label.setStyleSheet(label_style)
         self.categorical_color_display_layout.addWidget(self.categorical_color_label)
-
-        # Single color selection controls for categorical grouping
-        single_color_layout = QHBoxLayout()
-        self.single_color_checkbox = QCheckBox('Один цвет для всех групп')
-        self.single_color_checkbox.toggled.connect(self.on_single_color_toggled)
-        self.single_color_checkbox.setStyleSheet(checkbox_style)
-        single_color_layout.addWidget(self.single_color_checkbox)
-        self.single_color_button = QPushButton()
-        self.single_color_button.clicked.connect(self.pick_single_category_color)
-        self.single_color_button.setFixedSize(20, 20)
-        single_color_layout.addWidget(self.single_color_button)
-        self.categorical_color_display_layout.addLayout(single_color_layout)
-        self.update_single_color_button()
-
         grouping_options_layout.addLayout(self.categorical_color_display_layout)
 
         # Hide categorical controls initially
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
-        self.single_color_checkbox.setVisible(False)
-        self.single_color_button.setVisible(False)
         layout.addWidget(grouping_group_box)
 
         # Data filtering controls
@@ -1417,8 +1397,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(not numerical)
         self.categorical_group_field_combo.setVisible(not numerical)
         self.categorical_color_label.setVisible(not numerical)
-        self.single_color_checkbox.setVisible(not numerical)
-        self.single_color_button.setVisible(not numerical)
 
         if numerical:
             self.on_numerical_grouping_field_changed()
@@ -1442,30 +1420,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         """Обновляет цвет кнопки, отображающей конечный цвет."""
         self.end_color_button.setStyleSheet(f"background-color: {self.end_color.name()}; border: 1px solid #888888;")
 
-    def update_single_color_button(self):
-        """Refresh the single-category color button."""
-        self.single_color_button.setStyleSheet(
-            f"background-color: {self.single_category_color.name()}; border: 1px solid #888888;"
-        )
-
-    def pick_single_category_color(self):
-        """Choose the color applied to all categories when enabled."""
-        color = QColorDialog.getColor(self.single_category_color, self, "Выбрать цвет")
-        if color.isValid():
-            self.single_category_color = color
-            self.update_single_color_button()
-            if self.use_single_category_color:
-                for group in self.groups:
-                    group['color'] = color
-                    self.group_colors[group['label']] = color
-                self.update_group_display()
-
-    def on_single_color_toggled(self, checked):
-        """Handle switching between single color and individual colors."""
-        self.use_single_category_color = checked
-        self.single_color_button.setEnabled(checked)
-        self.on_categorical_grouping_field_changed()
-
     def on_categorical_grouping_field_changed(self):
         """Rebuild groups based on unique categorical values."""
         self.groups = []
@@ -1487,12 +1441,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         unique_vals = sorted(set(values))
         n = len(unique_vals)
         for i, val in enumerate(unique_vals):
-            if self.use_single_category_color:
-                color = self.single_category_color
-            else:
-                hue = (i * 360 / max(1, n)) / 360
-                r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
-                color = QColor(r, g, b)
+            hue = (i * 360 / max(1, n)) / 360
+            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
+            color = QColor(r, g, b)
             self.groups.append({'label': val, 'value': val, 'color': color})
             self.group_colors[val] = color
 
@@ -1500,9 +1451,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def pick_category_color(self, index):
         """Allow manual selection of a category color."""
-        if self.use_single_category_color:
-            self.pick_single_category_color()
-            return
         current = self.groups[index]['color']
         color = QColorDialog.getColor(current, self, "Выбрать цвет категории")
         if color.isValid():
@@ -1656,11 +1604,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         cat_layout = self.categorical_color_display_layout
 
         for layout in (num_layout, cat_layout):
-            keep = 1
-            if layout is cat_layout:
-                keep = 2
-            while layout.count() > keep:
-                child = layout.takeAt(keep)
+            while layout.count() > 1:
+                child = layout.takeAt(1)
                 if child.widget():
                     child.widget().deleteLater()
                 elif child.layout():
@@ -1729,8 +1674,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 swatch = QLabel()
                 swatch.setFixedSize(20, 20)
                 swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
-                if not self.use_single_category_color:
-                    swatch.mousePressEvent = lambda e, idx=i: self.pick_category_color(idx)
+                swatch.mousePressEvent = lambda e, idx=i: self.pick_category_color(idx)
                 g_layout.addWidget(swatch)
 
                 lbl = QLabel(group['label'])
