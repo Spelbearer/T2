@@ -205,6 +205,7 @@ class KmlGeneratorApp(QWidget):
         self.group_colors = {}
         self.groups = []
         self.end_color = QColor(255, 0, 0)
+        self.single_color = QColor(0, 128, 255)
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
@@ -453,16 +454,20 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         mode_layout = QHBoxLayout()
         self.numeric_mode_radio = QRadioButton('Группировка по диапазону значений')
-        self.unique_mode_radio = QRadioButton('Групировка по уникальным значениям')
+        self.unique_mode_radio = QRadioButton('Группировка по уникальным значениям')
+        self.single_color_mode_radio = QRadioButton('По уникальным значениям (один цвет)')
         self.numeric_mode_radio.setChecked(True)
         self.numeric_mode_radio.setStyleSheet(radio_button_style)
         self.unique_mode_radio.setStyleSheet(radio_button_style)
+        self.single_color_mode_radio.setStyleSheet(radio_button_style)
         self.numeric_mode_radio.toggled.connect(self.on_grouping_mode_changed)
         self.grouping_mode_group = QButtonGroup(self)
         self.grouping_mode_group.addButton(self.numeric_mode_radio)
         self.grouping_mode_group.addButton(self.unique_mode_radio)
+        self.grouping_mode_group.addButton(self.single_color_mode_radio)
         mode_layout.addWidget(self.numeric_mode_radio)
         mode_layout.addWidget(self.unique_mode_radio)
+        mode_layout.addWidget(self.single_color_mode_radio)
         mode_layout.addStretch(1)
         grouping_options_layout.addLayout(mode_layout)
         numerical_field_selection_layout = QHBoxLayout()
@@ -509,6 +514,17 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         opacity_layout.addWidget(self.opacity_spinbox)
         grouping_options_layout.addLayout(opacity_layout)
         self.update_end_color_button()
+
+        single_color_layout = QHBoxLayout()
+        self.single_color_label = QLabel('Цвет для уникальных значений:')
+        self.single_color_label.setStyleSheet(label_style)
+        single_color_layout.addWidget(self.single_color_label)
+        self.single_color_button = QPushButton()
+        self.single_color_button.clicked.connect(self.pick_single_color)
+        self.single_color_button.setFixedSize(20, 20)
+        single_color_layout.addWidget(self.single_color_button)
+        grouping_options_layout.addLayout(single_color_layout)
+        self.update_single_color_button()
         self.numerical_color_display_layout = QVBoxLayout()
         self.numerical_color_label = QLabel('Группы значений и цвета:')
         self.numerical_color_label.setStyleSheet(label_style)
@@ -535,6 +551,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
+        self.single_color_label.setVisible(False)
+        self.single_color_button.setVisible(False)
         layout.addWidget(grouping_group_box)
 
         # Data filtering controls
@@ -1385,8 +1403,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def on_grouping_mode_changed(self):
         """Switch between numerical and categorical grouping modes."""
-        numerical = self.numeric_mode_radio.isChecked()
-        self.grouping_mode = 'numerical' if numerical else 'categorical'
+        if self.numeric_mode_radio.isChecked():
+            self.grouping_mode = 'numerical'
+        elif self.unique_mode_radio.isChecked():
+            self.grouping_mode = 'categorical'
+        else:
+            self.grouping_mode = 'single_unique'
+
+        numerical = self.grouping_mode == 'numerical'
+        categorical = self.grouping_mode == 'categorical'
+        single_unique = self.grouping_mode == 'single_unique'
 
         for w in [self.numerical_group_label, self.numerical_group_field_combo,
                    self.num_groups_label, self.num_groups_spinbox,
@@ -1394,9 +1420,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                    self.numerical_color_label]:
             w.setVisible(numerical)
 
-        self.categorical_group_label.setVisible(not numerical)
-        self.categorical_group_field_combo.setVisible(not numerical)
-        self.categorical_color_label.setVisible(not numerical)
+        self.categorical_group_label.setVisible(categorical or single_unique)
+        self.categorical_group_field_combo.setVisible(categorical or single_unique)
+        self.categorical_color_label.setVisible(categorical)
+        self.single_color_label.setVisible(single_unique)
+        self.single_color_button.setVisible(single_unique)
 
         if numerical:
             self.on_numerical_grouping_field_changed()
@@ -1412,6 +1440,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
 
+    def pick_single_color(self):
+        """Диалог выбора цвета для всех уникальных значений."""
+        color = QColorDialog.getColor(self.single_color, self, "Выбрать цвет")
+        if color.isValid():
+            self.single_color = color
+            self.update_single_color_button()
+            if self.grouping_mode == 'single_unique':
+                self.on_categorical_grouping_field_changed()
+
     def on_opacity_changed(self):
         """Update stored group opacity when the spinbox value changes."""
         self.group_opacity = self.opacity_spinbox.value()
@@ -1419,6 +1456,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
     def update_end_color_button(self):
         """Обновляет цвет кнопки, отображающей конечный цвет."""
         self.end_color_button.setStyleSheet(f"background-color: {self.end_color.name()}; border: 1px solid #888888;")
+
+    def update_single_color_button(self):
+        """Обновляет цвет кнопки выбора цвета для уникальных значений."""
+        self.single_color_button.setStyleSheet(
+            f"background-color: {self.single_color.name()}; border: 1px solid #888888;"
+        )
 
     def on_categorical_grouping_field_changed(self):
         """Rebuild groups based on unique categorical values."""
@@ -1441,9 +1484,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         unique_vals = sorted(set(values))
         n = len(unique_vals)
         for i, val in enumerate(unique_vals):
-            hue = (i * 360 / max(1, n)) / 360
-            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
-            color = QColor(r, g, b)
+            if self.grouping_mode == 'single_unique':
+                color = self.single_color
+            else:
+                hue = (i * 360 / max(1, n)) / 360
+                r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
+                color = QColor(r, g, b)
             self.groups.append({'label': val, 'value': val, 'color': color})
             self.group_colors[val] = color
 
@@ -1668,7 +1714,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 g_layout.addStretch(1)
                 num_layout.addLayout(g_layout)
-        else:
+        elif self.grouping_mode == 'categorical':
             for i, group in enumerate(self.groups):
                 g_layout = QHBoxLayout()
                 swatch = QLabel()
@@ -1682,6 +1728,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 g_layout.addWidget(lbl)
                 g_layout.addStretch(1)
                 cat_layout.addLayout(g_layout)
+        else:
+            lbl = QLabel('Все уникальные значения будут окрашены выбранным цветом.')
+            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
+            cat_layout.addWidget(lbl)
 
     def clear_layout(self, layout):
         """
