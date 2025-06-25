@@ -139,63 +139,6 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
-    col, op, val = match.group(1), match.group(2), match.group(3)
-    if re.fullmatch(r'-?\d+(\.\d+)?', val):
-        return f"{col}{op}{val}"
-    # Wrap strings that are not already quoted
-    if not (val.startswith('"') or val.startswith("'")):
-        val = f'"{val}"'
-    return f"{col}{op}{val}"
-
-    expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
-    return expr
-
-def jenks_breaks(data, num_classes):
-    """Calculate Jenks natural breaks for the given data."""
-    if not data or num_classes <= 0:
-        return []
-
-    data = sorted(data)
-    num_data = len(data)
-    if num_classes > num_data:
-        num_classes = num_data
-
-    mat1 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
-    mat2 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
-
-    for i in range(1, num_classes + 1):
-        mat1[0][i] = 1
-        mat2[0][i] = 0
-        for j in range(1, num_data + 1):
-            mat2[j][i] = float('inf')
-
-    for l in range(1, num_data + 1):
-        s1 = s2 = w = 0.0
-        for m in range(l, 0, -1):
-            val = data[m - 1]
-            s1 += val
-            s2 += val * val
-            w += 1
-            variance = s2 - (s1 * s1) / w
-            if m > 1:
-                for j in range(2, num_classes + 1):
-                    if mat2[l][j] >= variance + mat2[m - 1][j - 1]:
-                        mat1[l][j] = m
-                        mat2[l][j] = variance + mat2[m - 1][j - 1]
-        mat1[l][1] = 1
-        mat2[l][1] = variance
-
-    breaks = [0] * (num_classes + 1)
-    breaks[num_classes] = data[-1]
-    k = num_data
-    for j in range(num_classes, 1, -1):
-        idx = int(mat1[k][j] - 2)
-        breaks[j - 1] = data[idx]
-        k = int(mat1[k][j] - 1)
-    breaks[0] = data[0]
-
-    return breaks
-
 class KmlGeneratorApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -639,26 +582,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 header_row = 0 if has_header else None
                 engine = 'openpyxl' if file_path.lower().endswith(('.xlsx', '.xlsm')) else 'xlrd'
                 df = pd.read_excel(file_path, header=header_row, skiprows=start_row, engine=engine)
-                
+
                 if not has_header:
                     df.columns = [f'Column {i}' for i in range(len(df.columns))]
 
                 df = df.fillna('')
                 self.headers = df.columns.astype(str).tolist()
                 self.data = df.values.tolist()
-
-                self._auto_cast_numeric()
-                self.filtered_data = [row[:] for row in self.data]
-
-
-                self._auto_cast_numeric()
-                self.filtered_data = [row[:] for row in self.data]
-
-                self.filtered_data = self.data[:]
-
-
-                if hasattr(self, 'filter_input'):
-                    self.filter_input.setText('')
             else:
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
@@ -666,47 +596,30 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     reader = csv.reader(f, delimiter=delimiter)
                     all_lines = list(reader)
 
-                    data_start_index = start_row
-                    if has_header:
-                        if start_row < len(all_lines):
-                            self.headers = all_lines[start_row]
-                            data_start_index += 1
-                    
-                    if data_start_index < len(all_lines):
-                        self.data = all_lines[data_start_index:]
+                data_start_index = start_row
+                if has_header and start_row < len(all_lines):
+                    self.headers = all_lines[start_row]
+                    data_start_index += 1
 
-                        self._auto_cast_numeric()
-                        self.filtered_data = [row[:] for row in self.data]
+                self.data = all_lines[data_start_index:] if data_start_index < len(all_lines) else []
 
-
-                        self._auto_cast_numeric()
-                        self.filtered_data = [row[:] for row in self.data]
-
-                        self.filtered_data = self.data[:]
-
-
-                        if hasattr(self, 'filter_input'):
-                            self.filter_input.setText('')
-                    else:
-                        self.data = []
-                        self.filtered_data = []
-                        if hasattr(self, 'filter_input'):
-                            self.filter_input.setText('')
-
-                    if not has_header and self.data:
+                if not has_header:
+                    if self.data:
                         self.headers = [f'Column {i}' for i in range(len(self.data[0]))]
-                    elif not has_header and not self.data and all_lines:
-                        if start_row < len(all_lines) and len(all_lines[start_row]) > 0:
-                            self.headers = [f'Column {i}' for i in range(len(all_lines[start_row]))]
-                        else:
-                            self.headers = []
-                    elif not has_header and not self.data:
+                    elif start_row < len(all_lines) and all_lines[start_row]:
+                        self.headers = [f'Column {i}' for i in range(len(all_lines[start_row]))]
+                    else:
                         self.headers = []
-            
+
+            self._auto_cast_numeric()
+            self.filtered_data = [row[:] for row in self.data]
+            if hasattr(self, 'filter_input'):
+                self.filter_input.setText('')
+
             inferred = self._infer_field_types(self.data, self.headers)
             for field, f_type in inferred.items():
                 self.field_types[field] = f_type
-            
+
             self.preview_data()
             self.update_field_combos()
             if self.grouping_mode == 'numerical':
@@ -716,7 +629,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
-            self.data, self.filtered_data, self.headers, self.field_types = [], [], [], {}
+            self.data = []
+            self.filtered_data = []
+            self.headers = []
+            self.field_types = {}
             self.preview_data()
             self.update_field_combos()
 
@@ -758,8 +674,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         kml_folders = {}
         if self.grouping_mode == 'numerical':
             grouping_active = num_group_idx != -1 and self.groups
-        else:
+        elif self.grouping_mode == 'categorical':
             grouping_active = cat_group_idx != -1 and self.groups
+        else:
+            grouping_active = False
         if grouping_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
@@ -852,25 +770,29 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if not kml_objects:
                     continue
 
-                if assigned_group:
+                color = None
+                if self.grouping_mode == 'single_unique':
+                    color = self.single_color
+                elif assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
-                    if color:
-                        alpha = int(255 * (self.group_opacity / 100))
-                        fill_color = simplekml.Color.rgb(
-                            color.red(), color.green(), color.blue(), alpha
-                        )
-                        line_color = simplekml.Color.rgb(
-                            color.red(), color.green(), color.blue()
-                        )
 
-                        for obj in kml_objects:
-                            if isinstance(obj, simplekml.Point):
-                                obj.style.iconstyle.color = line_color
-                            elif isinstance(obj, simplekml.LineString):
-                                obj.style.linestyle.color = line_color
-                            elif isinstance(obj, simplekml.Polygon):
-                                obj.style.polystyle.color = fill_color
-                                obj.style.linestyle.color = line_color
+                if color:
+                    alpha = int(255 * (self.group_opacity / 100))
+                    fill_color = simplekml.Color.rgb(
+                        color.red(), color.green(), color.blue(), alpha
+                    )
+                    line_color = simplekml.Color.rgb(
+                        color.red(), color.green(), color.blue()
+                    )
+
+                    for obj in kml_objects:
+                        if isinstance(obj, simplekml.Point):
+                            obj.style.iconstyle.color = line_color
+                        elif isinstance(obj, simplekml.LineString):
+                            obj.style.linestyle.color = line_color
+                        elif isinstance(obj, simplekml.Polygon):
+                            obj.style.polystyle.color = fill_color
+                            obj.style.linestyle.color = line_color
 
                 # Build description snippet
                 desc_fields = self.description_fields_combo.checkedItems()
@@ -1279,10 +1201,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             try:
                 df = pd.DataFrame(self.data, columns=self.headers)
 
-                numeric_cols = set()
-                for col, t in self.field_types.items():
-                    if t in ["Int", "Float"]:
-                        numeric_cols.add(col)
+                numeric_cols = {c for c, t in self.field_types.items() if t in ["Int", "Float"]}
 
                 pattern = r"([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)"
                 for col, op, val in re.findall(pattern, formula):
@@ -1291,30 +1210,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     if op in [">", "<", ">=", "<="] or re.fullmatch(r"-?\d+(\.\d+)?", val_clean):
                         numeric_cols.add(col)
 
-                df_numeric = df.copy()
                 for col in numeric_cols:
-                    if col in df_numeric.columns:
-
-                        df_numeric = df.copy()
-                        for col, t in self.field_types.items():
-                            if t in ["Int", "Float"] and col in df_numeric.columns:
-
-
-
-                                df_numeric[col] = pd.to_numeric(
-                                    df_numeric[col].astype(str).str.replace(",", "."),
-                                    errors="coerce",
-                                )
-
-                parsed = parse_filter_expression(formula)
-                filtered_indices = df_numeric.query(parsed).index
-                self.filtered_data = df.loc[filtered_indices].values.tolist()
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
 
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
-
-                filtered_df = df.query(formula)
-
                 self.filtered_data = filtered_df.values.tolist()
 
             except Exception as e:
@@ -1467,6 +1368,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         """Rebuild groups based on unique categorical values."""
         self.groups = []
         self.group_colors = {}
+
+        if self.grouping_mode == 'single_unique':
+            self.update_group_display()
+            return
 
         selected_field = self.categorical_group_field_combo.currentText()
         if not selected_field or not self.filtered_data or selected_field not in self.headers:
@@ -1657,6 +1562,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 elif child.layout():
                     self.clear_layout(child.layout())
 
+        if self.grouping_mode == 'single_unique':
+            lbl = QLabel('Все уникальные значения будут окрашены выбранным цветом.')
+            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
+            cat_layout.addWidget(lbl)
+            return
         if not self.groups:
             lbl = QLabel("Группы не определены или данные недоступны.")
             lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
