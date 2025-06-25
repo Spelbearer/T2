@@ -8,6 +8,8 @@ does not provide the requested number of boundaries. Zero values are
 considered when calculating ranges. The interface now allows selecting
 any number of groups up to twenty without the value being automatically
 reduced. Only the first twenty rows of the loaded file are shown in the
+interface. When grouping by unique values, a new checkbox allows applying
+a single color to all groups instead of choosing colors individually.
 
 preview table. Data may be filtered with a simple expression in the
 **Filter formula** field, for example `City=London and Value>5`.
