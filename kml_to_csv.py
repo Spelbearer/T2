@@ -221,39 +221,17 @@ class KmlGeneratorApp(QWidget):
         self.setGeometry(100, 100, 950, 850)
 
         self.setStyleSheet("""
-            QWidget {
-                background-color: #F2F2F7;
-                font-family: 'Helvetica Neue', Arial, sans-serif;
-            }
+            QWidget { background-color: #F8F8F8;
+font-family: Arial; }
             QGroupBox {
-                border: 1px solid #E5E5EA;
-                border-radius: 8px;
-                margin-top: 15px;
-                padding-top: 20px;
-
-                background-color: #FAFAFA;
-                font-family: Arial;
-            }
-            QGroupBox {
-                border: 1px solid #CCCCCC;
-                border-radius: 7px;
-                margin-top: 10px;
-                padding-top: 15px;
-                background-color: #FFFFFF;
+                border: 1px solid #D0D0D0;
+border-radius: 7px; margin-top: 10px;
+                padding-top: 15px; background-color: #FFFFFF;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px;
-
-                color: #1C1C1E;
-                font-weight: 600;
-                font-size: 12px;
-
-                color: #333333;
-                font-weight: bold;
-                font-size: 11px;
-
+left: 10px; padding: 0 5px;
+                color: #333333; font-weight: bold; font-size: 11px;
             }
             QScrollArea {
                 border: none;
@@ -263,93 +241,65 @@ class KmlGeneratorApp(QWidget):
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         main_container = QWidget()
-        main_layout = QHBoxLayout(main_container)
-
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(30)
-        left_layout = QVBoxLayout()
-        left_layout.setSpacing(20)
-        right_layout = QVBoxLayout()
-        right_layout.setSpacing(20)
-
-        left_layout = QVBoxLayout()
-        right_layout = QVBoxLayout()
-
-        main_layout.addLayout(left_layout)
-        main_layout.addLayout(right_layout)
+        layout = QVBoxLayout(main_container)
         main_app_layout = QVBoxLayout(self)
         main_app_layout.addWidget(scroll_area)
         self.setLayout(main_app_layout)
 
         bold_large_font = QFont()
-        bold_large_font.setPointSize(11)
+        bold_large_font.setPointSize(10)
         bold_large_font.setBold(True)
 
-
-        label_style = "QLabel { color: #1C1C1E; font-weight: 600; }"
-        button_style = (
-            "QPushButton { background-color: #007AFF; color: white;"
-            " border-radius: 6px; padding: 6px 12px; font-weight: 600; }"
-        )
-        button_hover_style = "QPushButton:hover { background-color: #0051d4; }"
-        lineedit_style = "QLineEdit { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 4px; border-radius: 4px; }"
-        combobox_style = "QComboBox { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 2px; border-radius: 4px; }"
-        spinbox_style = "QSpinBox { background-color: #F9F9F9; border: 1px solid #E5E5EA; padding: 4px; border-radius: 4px; }"
-        checkbox_style = "QCheckBox { color: #1C1C1E; font-weight: 600; }"
-        radio_button_style = "QRadioButton { color: #1C1C1E; font-weight: 600; }"
-
-        label_style = "QLabel { color: #333333; font-weight: bold; }"
-        button_style = (
-            "QPushButton { background-color: #E0E0E0; color: #333333;"
-            " border-radius: 5px; padding: 5px 10px; font-weight: bold; }"
-        )
-        button_hover_style = "QPushButton:hover { background-color: #CCCCCC }"
+        label_style = "QLabel { color: #333333;font-weight: bold;}"
+        button_style = "QPushButton { background-color: #555555; color: white; border-radius: 5px;padding: 5px 10px;font-weight: bold; }"
+        button_hover_style = "QPushButton:hover { background-color: #777777}"
         lineedit_style = "QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
         combobox_style = "QComboBox { background-color: #EEEEEE;border: 1px solid #CCCCCC; padding: 1px; }"
         spinbox_style = "QSpinBox { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }"
         checkbox_style = "QCheckBox { color: #333333;font-weight: bold;}"
         radio_button_style = "QRadioButton { color: #333333;font-weight: bold;}"
-
         table_style = """
-            QTableWidget { background-color: #FFFFFF; border: 1px solid #E5E5EA; gridline-color: #E5E5EA; }
-            QHeaderView::section { background-color: #F2F2F7; color: #1C1C1E; padding: 4px; border: 1px solid #E5E5EA; font-weight: 600; }
+            QTableWidget { background-color: #FFFFFF; border: 1px solid #CCCCCC; gridline-color: #E0E0E0;
+}
+            QHeaderView::section { background-color: #E0E0E0; color: #333333; padding: 4px;
+border: 1px solid #CCCCCC; font-weight: bold; }
         """
 
 
-        file_group_box = QGroupBox("File Input/Output Settings")
+        file_group_box = QGroupBox("Исходный файл/Настройка вывода")
         file_group_box.setFont(bold_large_font)
         file_group_layout = QVBoxLayout()
         file_group_layout.setContentsMargins(10, 15, 10, 15)
         file_group_box.setLayout(file_group_layout)
         
         file_layout = QHBoxLayout()
-        self.file_label = QLabel('Input Data File:')
+        self.file_label = QLabel('Исходный файл:')
         self.file_label.setStyleSheet(label_style)
         file_layout.addWidget(self.file_label)
         self.file_path_input = QLineEdit()
         self.file_path_input.setStyleSheet(lineedit_style)
         file_layout.addWidget(self.file_path_input)
-        self.browse_button = QPushButton('Browse')
+        self.browse_button = QPushButton('Выбрать')
         self.browse_button.clicked.connect(self.browse_file)
         self.browse_button.setStyleSheet(button_style + button_hover_style)
         file_layout.addWidget(self.browse_button)
         file_group_layout.addLayout(file_layout)
 
         output_file_layout = QHBoxLayout()
-        self.output_file_label = QLabel('Output KML File:')
+        self.output_file_label = QLabel('Выходной KML файл:')
         self.output_file_label.setStyleSheet(label_style)
         output_file_layout.addWidget(self.output_file_label)
         self.output_file_path_input = QLineEdit()
         self.output_file_path_input.setStyleSheet(lineedit_style)
         output_file_layout.addWidget(self.output_file_path_input)
-        self.browse_output_button = QPushButton('Browse')
+        self.browse_output_button = QPushButton('Выбрать')
         self.browse_output_button.clicked.connect(self.browse_output_file)
         self.browse_output_button.setStyleSheet(button_style + button_hover_style)
         output_file_layout.addWidget(self.browse_output_button)
         file_group_layout.addLayout(output_file_layout)
 
         options_layout = QHBoxLayout()
-        self.delimiter_label = QLabel('Delimiter:')
+        self.delimiter_label = QLabel('Разделитель:')
         self.delimiter_label.setStyleSheet(label_style)
         options_layout.addWidget(self.delimiter_label)
         self.delimiter_input = QLineEdit(';')
@@ -358,13 +308,13 @@ class KmlGeneratorApp(QWidget):
         self.delimiter_input.setStyleSheet(lineedit_style)
         options_layout.addWidget(self.delimiter_input)
 
-        self.has_header_checkbox = QCheckBox('File has header')
+        self.has_header_checkbox = QCheckBox('Наличик заголовка')
         self.has_header_checkbox.setChecked(True)
         self.has_header_checkbox.stateChanged.connect(self.on_file_settings_changed)
         self.has_header_checkbox.setStyleSheet(checkbox_style)
         options_layout.addWidget(self.has_header_checkbox)
 
-        self.start_row_label = QLabel('Data starts from row:')
+        self.start_row_label = QLabel('Данные начинаются со строки:')
         self.start_row_label.setStyleSheet(label_style)
         options_layout.addWidget(self.start_row_label)
         self.start_row_spinbox = QSpinBox()
@@ -376,7 +326,7 @@ class KmlGeneratorApp(QWidget):
         file_group_layout.addLayout(options_layout)
 
         encoding_layout = QHBoxLayout()
-        self.encoding_label = QLabel('File encoding:')
+        self.encoding_label = QLabel('Кодировка файла:')
         self.encoding_label.setStyleSheet(label_style)
         encoding_layout.addWidget(self.encoding_label)
         self.encoding_group = QButtonGroup(self)
@@ -393,14 +343,14 @@ class KmlGeneratorApp(QWidget):
         encoding_layout.addWidget(self.utf8_radio)
         encoding_layout.addWidget(self.cp1251_radio)
         file_group_layout.addLayout(encoding_layout)
-        left_layout.addWidget(file_group_box)
+        layout.addWidget(file_group_box)
         
-        coord_group_box = QGroupBox("Coordinate and KML Settings")
+        coord_group_box = QGroupBox("Настройка системы координат/KML метки")
         coord_group_box.setFont(bold_large_font)
         coord_layout = QVBoxLayout()
         coord_layout.setContentsMargins(10, 15, 10, 15)
         coord_group_box.setLayout(coord_layout)
-        self.coord_system_label = QLabel('Coordinate System:')
+        self.coord_system_label = QLabel('Система координат:')
         self.coord_system_label.setStyleSheet(label_style)
         coord_layout.addWidget(self.coord_system_label)
         self.coord_system_group = QButtonGroup(self)
@@ -420,7 +370,7 @@ class KmlGeneratorApp(QWidget):
         coord_layout.addLayout(coord_system_radio_layout)
         
         self.wkt_field_layout = QHBoxLayout()
-        self.wkt_field_label = QLabel('WKT Field:')
+        self.wkt_field_label = QLabel('WKT поле:')
         self.wkt_field_label.setStyleSheet(label_style)
         self.wkt_field_combo = QComboBox()
         self.wkt_field_combo.setStyleSheet(combobox_style)
@@ -429,11 +379,11 @@ class KmlGeneratorApp(QWidget):
         coord_layout.addLayout(self.wkt_field_layout)
 
         self.lon_lat_field_layout = QHBoxLayout()
-        self.lon_field_label = QLabel('Longitude Field:')
+        self.lon_field_label = QLabel('Longitude поле:')
         self.lon_field_label.setStyleSheet(label_style)
         self.lon_field_combo = QComboBox()
         self.lon_field_combo.setStyleSheet(combobox_style)
-        self.lat_field_label = QLabel('Latitude Field:')
+        self.lat_field_label = QLabel('Latitude поле:')
         self.lat_field_label.setStyleSheet(label_style)
         self.lat_field_combo = QComboBox()
         self.lat_field_combo.setStyleSheet(combobox_style)
@@ -449,13 +399,13 @@ class KmlGeneratorApp(QWidget):
         self.lat_field_label.setVisible(False)
         self.lat_field_combo.setVisible(False)
         
-        self.add_label_button = QPushButton('Select KML Label Field')
+        self.add_label_button = QPushButton('Выбрать поле для label')
         self.add_label_button.clicked.connect(self.toggle_kml_label_field)
         self.add_label_button.setStyleSheet(button_style + button_hover_style)
         coord_layout.addWidget(self.add_label_button)
 
         self.kml_label_field_layout = QHBoxLayout()
-        self.kml_label_field_label = QLabel('KML Label Field:')
+        self.kml_label_field_label = QLabel('Поле для label:')
         self.kml_label_field_label.setStyleSheet(label_style)
         self.kml_label_field_combo = QComboBox()
         self.kml_label_field_combo.setStyleSheet(combobox_style)
@@ -468,7 +418,7 @@ class KmlGeneratorApp(QWidget):
 
         # Description fields selection
         desc_layout = QHBoxLayout()
-        self.description_fields_label = QLabel('Description Fields:')
+        self.description_fields_label = QLabel('Поля для описания:')
         self.description_fields_label.setStyleSheet(label_style)
         self.description_fields_combo = CheckableComboBox()
         self.description_fields_combo.setStyleSheet(combobox_style)
@@ -476,13 +426,13 @@ class KmlGeneratorApp(QWidget):
         desc_layout.addWidget(self.description_fields_combo)
         coord_layout.addLayout(desc_layout)
 
-        self.use_custom_icon_checkbox = QCheckBox('Use Custom Icon')
+        self.use_custom_icon_checkbox = QCheckBox('Использовать пользовательский иконку')
         self.use_custom_icon_checkbox.setChecked(False)
         self.use_custom_icon_checkbox.stateChanged.connect(self.toggle_custom_icon_input)
         self.use_custom_icon_checkbox.setStyleSheet(checkbox_style)
         coord_layout.addWidget(self.use_custom_icon_checkbox)
         self.icon_url_layout = QHBoxLayout()
-        self.icon_url_label = QLabel('Icon URL:')
+        self.icon_url_label = QLabel('URL на иконку:')
         self.icon_url_label.setStyleSheet(label_style)
         self.icon_url_input = QLineEdit('http://maps.google.com/mapfiles/kml/pal2/icon18.png') # Changed default icon URL
         self.icon_url_input.setStyleSheet(lineedit_style)
@@ -491,19 +441,19 @@ class KmlGeneratorApp(QWidget):
         coord_layout.addLayout(self.icon_url_layout)
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
-        left_layout.addWidget(coord_group_box)
+        layout.addWidget(coord_group_box)
         
         self.on_coord_system_changed() 
 
-        grouping_group_box = QGroupBox("Grouping Settings")
+        grouping_group_box = QGroupBox("Настройка группировки")
         grouping_group_box.setFont(bold_large_font)
         grouping_options_layout = QVBoxLayout()
         grouping_options_layout.setContentsMargins(10, 15, 10, 15)
         grouping_group_box.setLayout(grouping_options_layout)
 
         mode_layout = QHBoxLayout()
-        self.numeric_mode_radio = QRadioButton('Numeric Ranges')
-        self.unique_mode_radio = QRadioButton('Unique Values')
+        self.numeric_mode_radio = QRadioButton('Группировка по диапазону значений')
+        self.unique_mode_radio = QRadioButton('Групировка по уникальным значениям')
         self.numeric_mode_radio.setChecked(True)
         self.numeric_mode_radio.setStyleSheet(radio_button_style)
         self.unique_mode_radio.setStyleSheet(radio_button_style)
@@ -516,7 +466,7 @@ class KmlGeneratorApp(QWidget):
         mode_layout.addStretch(1)
         grouping_options_layout.addLayout(mode_layout)
         numerical_field_selection_layout = QHBoxLayout()
-        self.numerical_group_label = QLabel('Numerical Grouping Field:')
+        self.numerical_group_label = QLabel('Числовое поле для группировки:')
         self.numerical_group_label.setStyleSheet(label_style)
         numerical_field_selection_layout.addWidget(self.numerical_group_label)
         self.numerical_group_field_combo = QComboBox()
@@ -525,7 +475,7 @@ class KmlGeneratorApp(QWidget):
         numerical_field_selection_layout.addWidget(self.numerical_group_field_combo)
         grouping_options_layout.addLayout(numerical_field_selection_layout)
         num_groups_layout = QHBoxLayout()
-        self.num_groups_label = QLabel('Number of Groups:')
+        self.num_groups_label = QLabel('Кол-во групп:')
         self.num_groups_label.setStyleSheet(label_style)
         num_groups_layout.addWidget(self.num_groups_label)
         self.num_groups_spinbox = QSpinBox()
@@ -537,7 +487,7 @@ class KmlGeneratorApp(QWidget):
         num_groups_layout.addWidget(self.num_groups_spinbox)
         grouping_options_layout.addLayout(num_groups_layout)
         end_color_layout = QHBoxLayout()
-        self.end_color_label = QLabel('End Color for Gradient:')
+        self.end_color_label = QLabel('Конечный цвет для градиента:')
         self.end_color_label.setStyleSheet(label_style)
         end_color_layout.addWidget(self.end_color_label)
         self.end_color_button = QPushButton()
@@ -547,7 +497,7 @@ class KmlGeneratorApp(QWidget):
         grouping_options_layout.addLayout(end_color_layout)
 
         opacity_layout = QHBoxLayout()
-        self.opacity_label = QLabel('Group Opacity (%):')
+        self.opacity_label = QLabel('Прозрачность (%):')
         self.opacity_label.setStyleSheet(label_style)
         opacity_layout.addWidget(self.opacity_label)
         self.opacity_spinbox = QSpinBox()
@@ -560,13 +510,13 @@ class KmlGeneratorApp(QWidget):
         grouping_options_layout.addLayout(opacity_layout)
         self.update_end_color_button()
         self.numerical_color_display_layout = QVBoxLayout()
-        self.numerical_color_label = QLabel('Numerical Group Ranges and Colors:')
+        self.numerical_color_label = QLabel('Группы значений и цвета:')
         self.numerical_color_label.setStyleSheet(label_style)
         self.numerical_color_display_layout.addWidget(self.numerical_color_label)
         grouping_options_layout.addLayout(self.numerical_color_display_layout)
 
         categorical_field_layout = QHBoxLayout()
-        self.categorical_group_label = QLabel('Categorical Grouping Field:')
+        self.categorical_group_label = QLabel('Категориальное поле для группировки:')
         self.categorical_group_label.setStyleSheet(label_style)
         categorical_field_layout.addWidget(self.categorical_group_label)
         self.categorical_group_field_combo = QComboBox()
@@ -576,7 +526,7 @@ class KmlGeneratorApp(QWidget):
         grouping_options_layout.addLayout(categorical_field_layout)
 
         self.categorical_color_display_layout = QVBoxLayout()
-        self.categorical_color_label = QLabel('Unique Values and Colors:')
+        self.categorical_color_label = QLabel('Уникальный значения и цвета:')
         self.categorical_color_label.setStyleSheet(label_style)
         self.categorical_color_display_layout.addWidget(self.categorical_color_label)
         grouping_options_layout.addLayout(self.categorical_color_display_layout)
@@ -585,40 +535,38 @@ class KmlGeneratorApp(QWidget):
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
-        left_layout.addWidget(grouping_group_box)
+        layout.addWidget(grouping_group_box)
 
         # Data filtering controls
-        filter_group_box = QGroupBox("Data Filtering")
+        filter_group_box = QGroupBox("Фильтрация данных")
         filter_group_box.setFont(bold_large_font)
         filter_layout = QHBoxLayout()
-        self.filter_label = QLabel('Filter formula:')
+        self.filter_label = QLabel('Формула фильтрации:')
         self.filter_label.setStyleSheet(label_style)
         filter_layout.addWidget(self.filter_label)
         self.filter_input = QLineEdit()
         self.filter_input.setStyleSheet(lineedit_style)
-        self.filter_input.setPlaceholderText("e.g., Column=Value and Other>5")
+        self.filter_input.setPlaceholderText("Пример: Column == Value and Other > 5")
         filter_layout.addWidget(self.filter_input)
-        self.apply_filter_button = QPushButton('Apply Filter')
+        self.apply_filter_button = QPushButton('Применить фильтр')
         self.apply_filter_button.setStyleSheet(button_style + button_hover_style)
         self.apply_filter_button.clicked.connect(self.apply_filter)
         filter_layout.addWidget(self.apply_filter_button)
         filter_group_box.setLayout(filter_layout)
-        right_layout.addWidget(filter_group_box)
+        layout.addWidget(filter_group_box)
 
         self.data_table = QTableWidget()
         self.data_table.setMinimumHeight(300)
         self.data_table.setStyleSheet(table_style)
         self.data_table.horizontalHeader().sectionDoubleClicked.connect(self.on_header_double_clicked)
-        right_layout.addWidget(self.data_table)
+        layout.addWidget(self.data_table)
 
-        self.generate_button = QPushButton('Generate KML')
+        self.generate_button = QPushButton('Создать KML файл')
         self.generate_button.clicked.connect(self.generate_kml)
         self.generate_button.setStyleSheet(button_style + button_hover_style)
-        right_layout.addWidget(self.generate_button)
+        layout.addWidget(self.generate_button)
 
-        left_layout.addStretch()
-        right_layout.addStretch()
-        main_container.setLayout(main_layout)
+        main_container.setLayout(layout)
         scroll_area.setWidget(main_container)
 
     def update_file_options_state(self, is_excel):
@@ -1083,7 +1031,7 @@ class KmlGeneratorApp(QWidget):
         header_rect = QRect(header_pos, 0, header_width, header_height) 
 
         combo = QComboBox(self) 
-        data_types = ['auto', 'int', 'float', 'varchar', 'date', 'geometry', 'text'] 
+        data_types = ['Auto', 'Int', 'Float', 'Varchar', 'Date', 'Geometry', 'Text'] 
         combo.addItems(data_types)
         combo.setStyleSheet("QComboBox { background-color: #DDDDDD; border: 1px solid #AAAAAA; padding: 1px; }")
 
@@ -1432,9 +1380,9 @@ class KmlGeneratorApp(QWidget):
         self.kml_label_field_combo.setVisible(not is_visible)
         
         if not is_visible:
-            self.add_label_button.setText('Hide KML Label Field')
+            self.add_label_button.setText('Скрыть поле KML метки')
         else:
-            self.add_label_button.setText('Select KML Label Field')
+            self.add_label_button.setText('Выбрать поле для label')
 
     def toggle_custom_icon_input(self):
         """Показать или скрыть поле ввода URL иконки."""
@@ -1464,7 +1412,7 @@ class KmlGeneratorApp(QWidget):
     
     def pick_end_color(self):
         """Открывает диалог выбора цвета для конечного цвета градиента."""
-        color = QColorDialog.getColor(self.end_color, self, "Select End Color")
+        color = QColorDialog.getColor(self.end_color, self, "Выбрать конечный цвет для градиента")
         if color.isValid():
             self.end_color = color
             self.update_end_color_button()
@@ -1511,7 +1459,7 @@ class KmlGeneratorApp(QWidget):
     def pick_category_color(self, index):
         """Allow manual selection of a category color."""
         current = self.groups[index]['color']
-        color = QColorDialog.getColor(current, self, "Select Color")
+        color = QColorDialog.getColor(current, self, "Выбрать цвет категории")
         if color.isValid():
             self.groups[index]['color'] = color
             self.group_colors[self.groups[index]['label']] = color
@@ -1671,7 +1619,7 @@ class KmlGeneratorApp(QWidget):
                     self.clear_layout(child.layout())
 
         if not self.groups:
-            lbl = QLabel("No groups defined or data unavailable.")
+            lbl = QLabel("Группы не определены или данные недоступны.")
             lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
             (cat_layout if self.grouping_mode == 'categorical' else num_layout).addWidget(lbl)
             return
@@ -1721,7 +1669,7 @@ class KmlGeneratorApp(QWidget):
                         if lower <= val < upper:
                             item_count += 1
 
-                count_label = QLabel(f" ({item_count} items)")
+                count_label = QLabel(f" ({item_count} элементов)")
                 count_label.setStyleSheet("QLabel { color: #555555;font-size: 9px; }")
                 g_layout.addWidget(count_label)
 
@@ -1768,20 +1716,20 @@ class KmlGeneratorApp(QWidget):
         try:
             new_value = float(sender.text().replace(',', '.'))
         except ValueError:
-            QMessageBox.warning(self, "Invalid Input", "Please enter a valid number for the boundary.")
+            QMessageBox.warning(self, "Неверный ввод", "Пожалуйста введите число.")
             sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
             return
 
         current_lower_bound = self.groups[group_index]['range'][0]
         if new_value <= current_lower_bound:
-            QMessageBox.warning(self, "Invalid Boundary", f"Upper bound must be greater than the lower bound ({current_lower_bound:.2f}).")
+            QMessageBox.warning(self, "Неправильная граница", f"Верхняя граница не может быть меньше нижней границы текущей группы ({current_lower_bound:.2f}).")
             sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
             return
         
         if group_index + 1 < len(self.groups):
             next_upper_bound = self.groups[group_index + 1]['range'][1]
             if new_value >= next_upper_bound:
-                QMessageBox.warning(self, "Invalid Boundary", f"Upper bound must be less than the next group's upper bound ({next_upper_bound:.2f}).")
+                QMessageBox.warning(self, "Неправильная граница", f"Верхняя граница не может быть больше верхней границы следующей группы ({next_upper_bound:.2f}).")
                 sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
                 return
 
