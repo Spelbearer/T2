@@ -139,6 +139,63 @@ def parse_filter_expression(expr: str) -> str:
     expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
     return expr
 
+    col, op, val = match.group(1), match.group(2), match.group(3)
+    if re.fullmatch(r'-?\d+(\.\d+)?', val):
+        return f"{col}{op}{val}"
+    # Wrap strings that are not already quoted
+    if not (val.startswith('"') or val.startswith("'")):
+        val = f'"{val}"'
+    return f"{col}{op}{val}"
+
+    expr = re.sub(r'([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)', repl, expr)
+    return expr
+
+def jenks_breaks(data, num_classes):
+    """Calculate Jenks natural breaks for the given data."""
+    if not data or num_classes <= 0:
+        return []
+
+    data = sorted(data)
+    num_data = len(data)
+    if num_classes > num_data:
+        num_classes = num_data
+
+    mat1 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+    mat2 = [[0] * (num_classes + 1) for _ in range(num_data + 1)]
+
+    for i in range(1, num_classes + 1):
+        mat1[0][i] = 1
+        mat2[0][i] = 0
+        for j in range(1, num_data + 1):
+            mat2[j][i] = float('inf')
+
+    for l in range(1, num_data + 1):
+        s1 = s2 = w = 0.0
+        for m in range(l, 0, -1):
+            val = data[m - 1]
+            s1 += val
+            s2 += val * val
+            w += 1
+            variance = s2 - (s1 * s1) / w
+            if m > 1:
+                for j in range(2, num_classes + 1):
+                    if mat2[l][j] >= variance + mat2[m - 1][j - 1]:
+                        mat1[l][j] = m
+                        mat2[l][j] = variance + mat2[m - 1][j - 1]
+        mat1[l][1] = 1
+        mat2[l][1] = variance
+
+    breaks = [0] * (num_classes + 1)
+    breaks[num_classes] = data[-1]
+    k = num_data
+    for j in range(num_classes, 1, -1):
+        idx = int(mat1[k][j] - 2)
+        breaks[j - 1] = data[idx]
+        k = int(mat1[k][j] - 1)
+    breaks[0] = data[0]
+
+    return breaks
+
 class KmlGeneratorApp(QWidget):
     def __init__(self):
         super().__init__()
@@ -148,7 +205,6 @@ class KmlGeneratorApp(QWidget):
         self.group_colors = {}
         self.groups = []
         self.end_color = QColor(255, 0, 0)
-        self.single_color = QColor(0, 128, 255)
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
@@ -397,20 +453,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         mode_layout = QHBoxLayout()
         self.numeric_mode_radio = QRadioButton('Группировка по диапазону значений')
-        self.unique_mode_radio = QRadioButton('Группировка по уникальным значениям')
-        self.single_color_mode_radio = QRadioButton('По уникальным значениям (один цвет)')
+        self.unique_mode_radio = QRadioButton('Групировка по уникальным значениям')
         self.numeric_mode_radio.setChecked(True)
         self.numeric_mode_radio.setStyleSheet(radio_button_style)
         self.unique_mode_radio.setStyleSheet(radio_button_style)
-        self.single_color_mode_radio.setStyleSheet(radio_button_style)
         self.numeric_mode_radio.toggled.connect(self.on_grouping_mode_changed)
         self.grouping_mode_group = QButtonGroup(self)
         self.grouping_mode_group.addButton(self.numeric_mode_radio)
         self.grouping_mode_group.addButton(self.unique_mode_radio)
-        self.grouping_mode_group.addButton(self.single_color_mode_radio)
         mode_layout.addWidget(self.numeric_mode_radio)
         mode_layout.addWidget(self.unique_mode_radio)
-        mode_layout.addWidget(self.single_color_mode_radio)
         mode_layout.addStretch(1)
         grouping_options_layout.addLayout(mode_layout)
         numerical_field_selection_layout = QHBoxLayout()
@@ -457,17 +509,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         opacity_layout.addWidget(self.opacity_spinbox)
         grouping_options_layout.addLayout(opacity_layout)
         self.update_end_color_button()
-
-        single_color_layout = QHBoxLayout()
-        self.single_color_label = QLabel('Цвет для уникальных значений:')
-        self.single_color_label.setStyleSheet(label_style)
-        single_color_layout.addWidget(self.single_color_label)
-        self.single_color_button = QPushButton()
-        self.single_color_button.clicked.connect(self.pick_single_color)
-        self.single_color_button.setFixedSize(20, 20)
-        single_color_layout.addWidget(self.single_color_button)
-        grouping_options_layout.addLayout(single_color_layout)
-        self.update_single_color_button()
         self.numerical_color_display_layout = QVBoxLayout()
         self.numerical_color_label = QLabel('Группы значений и цвета:')
         self.numerical_color_label.setStyleSheet(label_style)
@@ -494,8 +535,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
-        self.single_color_label.setVisible(False)
-        self.single_color_button.setVisible(False)
         layout.addWidget(grouping_group_box)
 
         # Data filtering controls
@@ -582,13 +621,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 header_row = 0 if has_header else None
                 engine = 'openpyxl' if file_path.lower().endswith(('.xlsx', '.xlsm')) else 'xlrd'
                 df = pd.read_excel(file_path, header=header_row, skiprows=start_row, engine=engine)
-
+                
                 if not has_header:
                     df.columns = [f'Column {i}' for i in range(len(df.columns))]
 
                 df = df.fillna('')
                 self.headers = df.columns.astype(str).tolist()
                 self.data = df.values.tolist()
+
+                self._auto_cast_numeric()
+                self.filtered_data = [row[:] for row in self.data]
+
+
+                self._auto_cast_numeric()
+                self.filtered_data = [row[:] for row in self.data]
+
+                self.filtered_data = self.data[:]
+
+
+                if hasattr(self, 'filter_input'):
+                    self.filter_input.setText('')
             else:
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
@@ -596,30 +648,47 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     reader = csv.reader(f, delimiter=delimiter)
                     all_lines = list(reader)
 
-                data_start_index = start_row
-                if has_header and start_row < len(all_lines):
-                    self.headers = all_lines[start_row]
-                    data_start_index += 1
+                    data_start_index = start_row
+                    if has_header:
+                        if start_row < len(all_lines):
+                            self.headers = all_lines[start_row]
+                            data_start_index += 1
+                    
+                    if data_start_index < len(all_lines):
+                        self.data = all_lines[data_start_index:]
 
-                self.data = all_lines[data_start_index:] if data_start_index < len(all_lines) else []
+                        self._auto_cast_numeric()
+                        self.filtered_data = [row[:] for row in self.data]
 
-                if not has_header:
-                    if self.data:
-                        self.headers = [f'Column {i}' for i in range(len(self.data[0]))]
-                    elif start_row < len(all_lines) and all_lines[start_row]:
-                        self.headers = [f'Column {i}' for i in range(len(all_lines[start_row]))]
+
+                        self._auto_cast_numeric()
+                        self.filtered_data = [row[:] for row in self.data]
+
+                        self.filtered_data = self.data[:]
+
+
+                        if hasattr(self, 'filter_input'):
+                            self.filter_input.setText('')
                     else:
+                        self.data = []
+                        self.filtered_data = []
+                        if hasattr(self, 'filter_input'):
+                            self.filter_input.setText('')
+
+                    if not has_header and self.data:
+                        self.headers = [f'Column {i}' for i in range(len(self.data[0]))]
+                    elif not has_header and not self.data and all_lines:
+                        if start_row < len(all_lines) and len(all_lines[start_row]) > 0:
+                            self.headers = [f'Column {i}' for i in range(len(all_lines[start_row]))]
+                        else:
+                            self.headers = []
+                    elif not has_header and not self.data:
                         self.headers = []
-
-            self._auto_cast_numeric()
-            self.filtered_data = [row[:] for row in self.data]
-            if hasattr(self, 'filter_input'):
-                self.filter_input.setText('')
-
+            
             inferred = self._infer_field_types(self.data, self.headers)
             for field, f_type in inferred.items():
                 self.field_types[field] = f_type
-
+            
             self.preview_data()
             self.update_field_combos()
             if self.grouping_mode == 'numerical':
@@ -629,10 +698,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
-            self.data = []
-            self.filtered_data = []
-            self.headers = []
-            self.field_types = {}
+            self.data, self.filtered_data, self.headers, self.field_types = [], [], [], {}
             self.preview_data()
             self.update_field_combos()
 
@@ -674,10 +740,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         kml_folders = {}
         if self.grouping_mode == 'numerical':
             grouping_active = num_group_idx != -1 and self.groups
-        elif self.grouping_mode == 'categorical':
-            grouping_active = cat_group_idx != -1 and self.groups
         else:
-            grouping_active = False
+            grouping_active = cat_group_idx != -1 and self.groups
         if grouping_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
@@ -770,29 +834,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 if not kml_objects:
                     continue
 
-                color = None
-                if self.grouping_mode == 'single_unique':
-                    color = self.single_color
-                elif assigned_group:
+                if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
+                    if color:
+                        alpha = int(255 * (self.group_opacity / 100))
+                        fill_color = simplekml.Color.rgb(
+                            color.red(), color.green(), color.blue(), alpha
+                        )
+                        line_color = simplekml.Color.rgb(
+                            color.red(), color.green(), color.blue()
+                        )
 
-                if color:
-                    alpha = int(255 * (self.group_opacity / 100))
-                    fill_color = simplekml.Color.rgb(
-                        color.red(), color.green(), color.blue(), alpha
-                    )
-                    line_color = simplekml.Color.rgb(
-                        color.red(), color.green(), color.blue()
-                    )
-
-                    for obj in kml_objects:
-                        if isinstance(obj, simplekml.Point):
-                            obj.style.iconstyle.color = line_color
-                        elif isinstance(obj, simplekml.LineString):
-                            obj.style.linestyle.color = line_color
-                        elif isinstance(obj, simplekml.Polygon):
-                            obj.style.polystyle.color = fill_color
-                            obj.style.linestyle.color = line_color
+                        for obj in kml_objects:
+                            if isinstance(obj, simplekml.Point):
+                                obj.style.iconstyle.color = line_color
+                            elif isinstance(obj, simplekml.LineString):
+                                obj.style.linestyle.color = line_color
+                            elif isinstance(obj, simplekml.Polygon):
+                                obj.style.polystyle.color = fill_color
+                                obj.style.linestyle.color = line_color
 
                 # Build description snippet
                 desc_fields = self.description_fields_combo.checkedItems()
@@ -1201,7 +1261,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             try:
                 df = pd.DataFrame(self.data, columns=self.headers)
 
-                numeric_cols = {c for c, t in self.field_types.items() if t in ["Int", "Float"]}
+                numeric_cols = set()
+                for col, t in self.field_types.items():
+                    if t in ["Int", "Float"]:
+                        numeric_cols.add(col)
 
                 pattern = r"([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)"
                 for col, op, val in re.findall(pattern, formula):
@@ -1210,12 +1273,30 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     if op in [">", "<", ">=", "<="] or re.fullmatch(r"-?\d+(\.\d+)?", val_clean):
                         numeric_cols.add(col)
 
+                df_numeric = df.copy()
                 for col in numeric_cols:
-                    if col in df.columns:
-                        df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors='coerce')
+                    if col in df_numeric.columns:
+
+                        df_numeric = df.copy()
+                        for col, t in self.field_types.items():
+                            if t in ["Int", "Float"] and col in df_numeric.columns:
+
+
+
+                                df_numeric[col] = pd.to_numeric(
+                                    df_numeric[col].astype(str).str.replace(",", "."),
+                                    errors="coerce",
+                                )
+
+                parsed = parse_filter_expression(formula)
+                filtered_indices = df_numeric.query(parsed).index
+                self.filtered_data = df.loc[filtered_indices].values.tolist()
 
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
+
+                filtered_df = df.query(formula)
+
                 self.filtered_data = filtered_df.values.tolist()
 
             except Exception as e:
@@ -1304,16 +1385,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def on_grouping_mode_changed(self):
         """Switch between numerical and categorical grouping modes."""
-        if self.numeric_mode_radio.isChecked():
-            self.grouping_mode = 'numerical'
-        elif self.unique_mode_radio.isChecked():
-            self.grouping_mode = 'categorical'
-        else:
-            self.grouping_mode = 'single_unique'
-
-        numerical = self.grouping_mode == 'numerical'
-        categorical = self.grouping_mode == 'categorical'
-        single_unique = self.grouping_mode == 'single_unique'
+        numerical = self.numeric_mode_radio.isChecked()
+        self.grouping_mode = 'numerical' if numerical else 'categorical'
 
         for w in [self.numerical_group_label, self.numerical_group_field_combo,
                    self.num_groups_label, self.num_groups_spinbox,
@@ -1321,11 +1394,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                    self.numerical_color_label]:
             w.setVisible(numerical)
 
-        self.categorical_group_label.setVisible(categorical or single_unique)
-        self.categorical_group_field_combo.setVisible(categorical or single_unique)
-        self.categorical_color_label.setVisible(categorical)
-        self.single_color_label.setVisible(single_unique)
-        self.single_color_button.setVisible(single_unique)
+        self.categorical_group_label.setVisible(not numerical)
+        self.categorical_group_field_combo.setVisible(not numerical)
+        self.categorical_color_label.setVisible(not numerical)
 
         if numerical:
             self.on_numerical_grouping_field_changed()
@@ -1341,15 +1412,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
 
-    def pick_single_color(self):
-        """Диалог выбора цвета для всех уникальных значений."""
-        color = QColorDialog.getColor(self.single_color, self, "Выбрать цвет")
-        if color.isValid():
-            self.single_color = color
-            self.update_single_color_button()
-            if self.grouping_mode == 'single_unique':
-                self.on_categorical_grouping_field_changed()
-
     def on_opacity_changed(self):
         """Update stored group opacity when the spinbox value changes."""
         self.group_opacity = self.opacity_spinbox.value()
@@ -1358,20 +1420,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         """Обновляет цвет кнопки, отображающей конечный цвет."""
         self.end_color_button.setStyleSheet(f"background-color: {self.end_color.name()}; border: 1px solid #888888;")
 
-    def update_single_color_button(self):
-        """Обновляет цвет кнопки выбора цвета для уникальных значений."""
-        self.single_color_button.setStyleSheet(
-            f"background-color: {self.single_color.name()}; border: 1px solid #888888;"
-        )
-
     def on_categorical_grouping_field_changed(self):
         """Rebuild groups based on unique categorical values."""
         self.groups = []
         self.group_colors = {}
-
-        if self.grouping_mode == 'single_unique':
-            self.update_group_display()
-            return
 
         selected_field = self.categorical_group_field_combo.currentText()
         if not selected_field or not self.filtered_data or selected_field not in self.headers:
@@ -1389,12 +1441,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         unique_vals = sorted(set(values))
         n = len(unique_vals)
         for i, val in enumerate(unique_vals):
-            if self.grouping_mode == 'single_unique':
-                color = self.single_color
-            else:
-                hue = (i * 360 / max(1, n)) / 360
-                r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
-                color = QColor(r, g, b)
+            hue = (i * 360 / max(1, n)) / 360
+            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.7, 1)]
+            color = QColor(r, g, b)
             self.groups.append({'label': val, 'value': val, 'color': color})
             self.group_colors[val] = color
 
@@ -1562,11 +1611,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 elif child.layout():
                     self.clear_layout(child.layout())
 
-        if self.grouping_mode == 'single_unique':
-            lbl = QLabel('Все уникальные значения будут окрашены выбранным цветом.')
-            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
-            cat_layout.addWidget(lbl)
-            return
         if not self.groups:
             lbl = QLabel("Группы не определены или данные недоступны.")
             lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
@@ -1624,7 +1668,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 g_layout.addStretch(1)
                 num_layout.addLayout(g_layout)
-        elif self.grouping_mode == 'categorical':
+        else:
             for i, group in enumerate(self.groups):
                 g_layout = QHBoxLayout()
                 swatch = QLabel()
@@ -1638,10 +1682,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 g_layout.addWidget(lbl)
                 g_layout.addStretch(1)
                 cat_layout.addLayout(g_layout)
-        else:
-            lbl = QLabel('Все уникальные значения будут окрашены выбранным цветом.')
-            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
-            cat_layout.addWidget(lbl)
 
     def clear_layout(self, layout):
         """
