@@ -943,7 +943,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 except ValueError:
                     pass
 
-            self.field_types[self.headers[col_idx]] = "int" if is_int_col else "float"
+            self.field_types[self.headers[col_idx]] = "Int" if is_int_col else "Float"
 
     def _infer_field_types(self, data, headers):
         """
@@ -972,7 +972,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     sample_values.append(value)
 
             if not sample_values:
-                inferred_types[field_name] = 'varchar'
+                inferred_types[field_name] = 'Varchar'
                 continue
 
             for value in sample_values:
@@ -985,7 +985,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     pass
             
             if is_wkt:
-                inferred_types[field_name] = 'geometry'
+                inferred_types[field_name] = 'Geometry'
                 continue
 
             for value in sample_values:
@@ -1006,9 +1006,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     except (ValueError, TypeError):
                         is_integer = False # Should not happen if it's already numerical, but defensive
                         break
-                inferred_types[field_name] = 'int' if is_integer else 'float'
+                inferred_types[field_name] = 'Int' if is_integer else 'Float'
             else:
-                inferred_types[field_name] = 'varchar'
+                inferred_types[field_name] = 'Varchar'
         
         return inferred_types
 
@@ -1031,12 +1031,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         header_rect = QRect(header_pos, 0, header_width, header_height) 
 
         combo = QComboBox(self) 
-        data_types = ['Auto', 'Int', 'Float', 'Varchar', 'Date', 'Geometry', 'Text'] 
+        data_types = ['Auto', 'Int', 'Float', 'Varchar', 'Geometry'] 
         combo.addItems(data_types)
         combo.setStyleSheet("QComboBox { background-color: #DDDDDD; border: 1px solid #AAAAAA; padding: 1px; }")
 
         field_name = self.headers[column_index]
-        current_type = self.field_types.get(field_name, 'auto')
+        current_type = self.field_types.get(field_name, 'Auto')
         combo.setCurrentText(current_type)
         
         global_pos = self.data_table.horizontalHeader().mapToGlobal(header_rect.topLeft())
@@ -1125,7 +1125,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         Helper function for 'auto' type selection.
         """
         if not self.data or column_index >= len(self.headers):
-            return 'varchar' # Default if no data or invalid column
+            return 'Varchar' # Default if no data or invalid column
 
         is_numerical = True
         is_wkt = False
@@ -1139,7 +1139,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 sample_values.append(value)
 
         if not sample_values:
-            return 'varchar'
+            return 'Varchar'
 
         for value in sample_values:
             try:
@@ -1151,7 +1151,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 pass
         
         if is_wkt:
-            return 'geometry'
+            return 'Geometry'
 
         for value in sample_values:
             try:
@@ -1170,9 +1170,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 except (ValueError, TypeError):
                     is_integer = False
                     break
-            return 'int' if is_integer else 'float'
+            return 'Int' if is_integer else 'Float'
         else:
-            return 'varchar'
+            return 'Varchar'
 
 
     def update_field_combos(self):
@@ -1190,7 +1190,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         num_columns = len(self.headers) if self.headers else (len(self.data[0]) if self.data else 0)
         all_fields = self.headers[:]
         
-        numerical_fields = [field for field in all_fields if self.field_types.get(field) in ['int', 'float']]
+        numerical_fields = [field for field in all_fields if self.field_types.get(field) in ['Int', 'Float']]
         categorical_fields = [f for f in all_fields if f not in numerical_fields]
 
         combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
@@ -1263,7 +1263,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 numeric_cols = set()
                 for col, t in self.field_types.items():
-                    if t in ["int", "float"]:
+                    if t in ["Int", "Float"]:
                         numeric_cols.add(col)
 
                 pattern = r"([\w ]+)\s*(==|!=|>=|<=|>|<)\s*([^&|]+)"
@@ -1279,7 +1279,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                         df_numeric = df.copy()
                         for col, t in self.field_types.items():
-                            if t in ["int", "float"] and col in df_numeric.columns:
+                            if t in ["Int", "Float"] and col in df_numeric.columns:
 
 
 
@@ -1292,19 +1292,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 filtered_indices = df_numeric.query(parsed).index
                 self.filtered_data = df.loc[filtered_indices].values.tolist()
 
-
-
-
-
                 parsed = parse_filter_expression(formula)
                 filtered_df = df.query(parsed)
 
                 filtered_df = df.query(formula)
 
                 self.filtered_data = filtered_df.values.tolist()
-
-
-
 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
