@@ -96,6 +96,24 @@ class CheckableComboBox(QComboBox):
                 items.append(item.text())
         return items
 
+    def checkedIndices(self):
+        """Return the integer indices of all checked items.
+
+        The first selectable column resides at row 1 because row 0 is the
+        "select all" entry.  If custom data has been set for an item it will be
+        returned instead of the positional index, allowing callers to rely on
+        stable identifiers.
+        """
+        indices = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.text() == self.select_all_text:
+                continue
+            if item.checkState() == Qt.CheckState.Checked:
+                data = item.data(Qt.ItemDataRole.UserRole)
+                indices.append(data if data is not None else i - 1)
+        return indices
+
     def update_display_text(self):
         checked = self.checkedItems()
         if self.show_count:
@@ -813,7 +831,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.all_data = [row[:] for row in self.data]
             self.all_headers = self.headers[:]
             self.all_field_types = self.field_types.copy()
-            self.selected_columns = self.headers[:]
+            # Track selected columns by their positional indices to avoid
+            # dropping the first column or mis-handling duplicate names.
+            self.selected_columns = list(range(len(self.headers)))
             self.update_columns_combo()
 
             self.preview_data()
@@ -1484,12 +1504,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.columns_combo.blockSignals(True)
         self.columns_combo.clear()
         self.columns_combo.addItem(self.columns_combo.select_all_text)
-        for field in self.all_headers:
-            self.columns_combo.addItem(field)
-        # Apply check state
-        for i, field in enumerate(self.all_headers, start=1):
-            item = self.columns_combo.model().item(i)
-            if field in self.selected_columns:
+        for idx, field in enumerate(self.all_headers):
+            # Store the original column index in the item for later retrieval
+            self.columns_combo.addItem(field, idx)
+            item = self.columns_combo.model().item(idx + 1)
+            if idx in self.selected_columns:
                 item.setCheckState(Qt.CheckState.Checked)
         self.columns_combo.update_select_all_state()
         self.columns_combo.update_display_text()
@@ -1500,13 +1519,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.columns_combo.setEnabled(enabled)
 
     def on_columns_changed(self):
-        checked = self.columns_combo.checkedItems()
+        indices = sorted(self.columns_combo.checkedIndices())
+        self.selected_columns = indices
 
-        # Ensure only columns that exist in the original header list are processed
-        valid_checked = [c for c in checked if c in self.all_headers]
-        self.selected_columns = valid_checked
-
-        if not valid_checked:
+        if not indices:
             self.headers = []
             self.data = []
             self.filtered_data = []
@@ -1521,7 +1537,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 self.on_categorical_grouping_field_changed()
             return
 
-        indices = [self.all_headers.index(c) for c in valid_checked]
         self.headers = [self.all_headers[i] for i in indices]
         self.data = [[row[i] for i in indices] for row in self.all_data]
         self.field_types = {h: self.all_field_types.get(h, 'auto') for h in self.headers}
