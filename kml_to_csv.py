@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
 
 import numpy as np
 import pandas as pd
@@ -34,6 +34,7 @@ class CheckableComboBox(QComboBox):
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
+        self.lineEdit().installEventFilter(self)
         self.show_count = show_count
         self.select_all_text = "Выбрать все"
 
@@ -65,6 +66,12 @@ class CheckableComboBox(QComboBox):
         self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
+
+    def eventFilter(self, obj, event):
+        if obj is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
+            self.showPopup()
+            return True
+        return super().eventFilter(obj, event)
 
     def checkedItems(self):
         items = []
