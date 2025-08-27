@@ -572,15 +572,18 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         mode_layout = QHBoxLayout()
         self.numeric_mode_radio = QRadioButton('Группировка по диапазону значений')
         self.unique_mode_radio = QRadioButton('Групировка по уникальным значениям')
+        self.single_mode_radio = QRadioButton('Единый цвет (без группировки)')
         self.numeric_mode_radio.setChecked(True)
-        self.numeric_mode_radio.setStyleSheet(radio_button_style)
-        self.unique_mode_radio.setStyleSheet(radio_button_style)
-        self.numeric_mode_radio.toggled.connect(self.on_grouping_mode_changed)
+        for rb in (self.numeric_mode_radio, self.unique_mode_radio, self.single_mode_radio):
+            rb.setStyleSheet(radio_button_style)
         self.grouping_mode_group = QButtonGroup(self)
         self.grouping_mode_group.addButton(self.numeric_mode_radio)
         self.grouping_mode_group.addButton(self.unique_mode_radio)
+        self.grouping_mode_group.addButton(self.single_mode_radio)
+        self.grouping_mode_group.buttonClicked.connect(self.on_grouping_mode_changed)
         mode_layout.addWidget(self.numeric_mode_radio)
         mode_layout.addWidget(self.unique_mode_radio)
+        mode_layout.addWidget(self.single_mode_radio)
         mode_layout.addStretch(1)
         grouping_options_layout.addLayout(mode_layout)
         numerical_field_selection_layout = QHBoxLayout()
@@ -840,8 +843,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.update_field_combos()
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
-            else:
+            elif self.grouping_mode == 'categorical':
                 self.on_categorical_grouping_field_changed()
+            else:
+                self.update_group_display()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
@@ -889,8 +894,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         kml_folders = {}
         if self.grouping_mode == 'numerical':
             grouping_active = num_group_idx != -1 and self.groups
-        else:
+        elif self.grouping_mode == 'categorical':
             grouping_active = cat_group_idx != -1 and self.groups
+        else:
+            grouping_active = False
         if grouping_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
@@ -1261,12 +1268,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if new_type == 'auto':
             inferred_type = self._infer_field_types_for_column(column_index)
             self.field_types[field_name] = inferred_type
-            
+
         self.update_field_combos()
         if self.grouping_mode == 'numerical':
             self.on_numerical_grouping_field_changed()
-        else:
+        elif self.grouping_mode == 'categorical':
             self.on_categorical_grouping_field_changed()
+        else:
+            self.update_group_display()
         
     def _infer_field_types_for_column(self, column_index):
         """
@@ -1454,8 +1463,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.preview_data()
         if self.grouping_mode == 'numerical':
             self.on_numerical_grouping_field_changed()
-        else:
+        elif self.grouping_mode == 'categorical':
             self.on_categorical_grouping_field_changed()
+        else:
+            self.update_group_display()
 
 
     def preview_data(self):
@@ -1533,8 +1544,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.preview_data()
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
-            else:
+            elif self.grouping_mode == 'categorical':
                 self.on_categorical_grouping_field_changed()
+            else:
+                self.update_group_display()
             return
 
         self.headers = [self.all_headers[i] for i in indices]
@@ -1547,8 +1560,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.preview_data()
         if self.grouping_mode == 'numerical':
             self.on_numerical_grouping_field_changed()
-        else:
+        elif self.grouping_mode == 'categorical':
             self.on_categorical_grouping_field_changed()
+        else:
+            self.update_group_display()
 
     def on_coord_system_changed(self):
         """Переключает видимость полей WKT или Longitude/Latitude."""
@@ -1583,9 +1598,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.icon_url_input.setVisible(is_checked)
 
     def on_grouping_mode_changed(self):
-        """Switch between numerical and categorical grouping modes."""
-        numerical = self.numeric_mode_radio.isChecked()
-        self.grouping_mode = 'numerical' if numerical else 'categorical'
+        """Switch between numerical, categorical, and single-color modes."""
+        if self.numeric_mode_radio.isChecked():
+            self.grouping_mode = 'numerical'
+        elif self.unique_mode_radio.isChecked():
+            self.grouping_mode = 'categorical'
+        else:
+            self.grouping_mode = 'single'
+
+        numerical = self.grouping_mode == 'numerical'
+        categorical = self.grouping_mode == 'categorical'
 
         for w in [self.numerical_group_label, self.numerical_group_field_combo,
                    self.num_groups_label, self.num_groups_spinbox,
@@ -1593,14 +1615,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                    self.numerical_color_label]:
             w.setVisible(numerical)
 
-        self.categorical_group_label.setVisible(not numerical)
-        self.categorical_group_field_combo.setVisible(not numerical)
-        self.categorical_color_label.setVisible(not numerical)
+        self.categorical_group_label.setVisible(categorical)
+        self.categorical_group_field_combo.setVisible(categorical)
+        self.categorical_color_label.setVisible(categorical)
 
-        if numerical:
+        if self.grouping_mode == 'numerical':
             self.on_numerical_grouping_field_changed()
-        else:
+        elif self.grouping_mode == 'categorical':
             self.on_categorical_grouping_field_changed()
+        else:
+            self.update_group_display()
     
     def pick_end_color(self):
         """Открывает диалог выбора цвета для конечного цвета градиента."""
@@ -1811,9 +1835,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     self.clear_layout(child.layout())
 
         if not self.groups:
-            lbl = QLabel("Группы не определены или данные недоступны.")
-            lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
-            (cat_layout if self.grouping_mode == 'categorical' else num_layout).addWidget(lbl)
+            if self.grouping_mode != 'single':
+                lbl = QLabel("Группы не определены или данные недоступны.")
+                lbl.setStyleSheet("QLabel { color: #555555;margin-left: 10px; }")
+                if self.grouping_mode == 'categorical':
+                    cat_layout.addWidget(lbl)
+                else:
+                    num_layout.addWidget(lbl)
             return
 
         if self.grouping_mode == 'numerical':
@@ -1867,7 +1895,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 g_layout.addStretch(1)
                 num_layout.addLayout(g_layout)
-        else:
+        elif self.grouping_mode == 'categorical':
             for i, group in enumerate(self.groups):
                 g_layout = QHBoxLayout()
                 swatch = QLabel()
