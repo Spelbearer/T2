@@ -2,6 +2,10 @@
 
 This repository contains a PyQt application for converting tabular data into
 
+The interface now includes a multi-select control to choose which columns from
+the loaded file are used. All blocks such as previews and field selectors update
+to reflect the current column selection.
+
 KML files. Numerical grouping ranges use Jenks natural breaks with
 a fallback to equal intervals when data variety is low or when Jenks
 does not provide the requested number of boundaries. Zero values are
