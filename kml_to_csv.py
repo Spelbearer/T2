@@ -1486,9 +1486,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def on_columns_changed(self):
         checked = self.columns_combo.checkedItems()
-        self.selected_columns = checked
 
-        if not checked:
+        # Ensure only columns that exist in the original header list are processed
+        valid_checked = [c for c in checked if c in self.all_headers]
+        self.selected_columns = valid_checked
+
+        if not valid_checked:
             self.headers = []
             self.data = []
             self.filtered_data = []
@@ -1503,7 +1506,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 self.on_categorical_grouping_field_changed()
             return
 
-        indices = [self.all_headers.index(c) for c in checked]
+        indices = [self.all_headers.index(c) for c in valid_checked]
         self.headers = [self.all_headers[i] for i in indices]
         self.data = [[row[i] for i in indices] for row in self.all_data]
         self.field_types = {h: self.all_field_types.get(h, 'auto') for h in self.headers}
