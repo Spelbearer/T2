@@ -30,7 +30,11 @@ class CheckableComboBox(QComboBox):
     def __init__(self, parent=None, show_count=False):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
-        self.view().clicked.connect(self.handle_item_clicked)
+        # Use the pressed signal and handle state changes manually so that
+        # the check state is always updated before we emit signals.
+        # This prevents issues where a column could not be re-enabled after
+        # being toggled off (especially for the first column in the list).
+        self.view().pressed.connect(self.handle_item_pressed)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
@@ -51,15 +55,26 @@ class CheckableComboBox(QComboBox):
         self.model().clear()
         self.update_display_text()
 
-    def handle_item_clicked(self, index):
+    def handle_item_pressed(self, index):
+        """Toggle check state for the pressed item and update dependent UI."""
         item = self.model().itemFromIndex(index)
         if item.text() == self.select_all_text:
-            new_state = item.checkState()
+            # Toggle all items based on the current state of the select-all item
+            new_state = (Qt.CheckState.Unchecked
+                         if item.checkState() == Qt.CheckState.Checked
+                         else Qt.CheckState.Checked)
+            item.setCheckState(new_state)
             for i in range(self.model().rowCount()):
                 cur_item = self.model().item(i)
                 if cur_item.text() == self.select_all_text:
                     continue
                 cur_item.setCheckState(new_state)
+        else:
+            # Toggle the individual item
+            new_state = (Qt.CheckState.Unchecked
+                         if item.checkState() == Qt.CheckState.Checked
+                         else Qt.CheckState.Checked)
+            item.setCheckState(new_state)
         self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
