@@ -30,7 +30,7 @@ class CheckableComboBox(QComboBox):
     def __init__(self, parent=None, show_count=False):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
-        self.view().pressed.connect(self.handle_item_pressed)
+        self.view().clicked.connect(self.handle_item_clicked)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
@@ -51,21 +51,19 @@ class CheckableComboBox(QComboBox):
         self.model().clear()
         self.update_display_text()
 
-    def handle_item_pressed(self, index):
+    def handle_item_clicked(self, index):
         item = self.model().itemFromIndex(index)
         if item.text() == self.select_all_text:
-            new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
+            new_state = item.checkState()
             for i in range(self.model().rowCount()):
                 cur_item = self.model().item(i)
                 if cur_item.text() == self.select_all_text:
                     continue
                 cur_item.setCheckState(new_state)
-        else:
-            new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
-            item.setCheckState(new_state)
         self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
+        self.showPopup()
 
     def eventFilter(self, obj, event):
         if obj is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
