@@ -295,6 +295,7 @@ class KmlGeneratorApp(QWidget):
         self.group_colors = {}
         self.groups = []
         self.end_color = QColor(255, 0, 0)
+        self.single_color = QColor('#FF0000')
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
@@ -617,6 +618,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         end_color_layout.addWidget(self.end_color_button)
         grouping_options_layout.addLayout(end_color_layout)
 
+        single_color_layout = QHBoxLayout()
+        self.single_color_label = QLabel('Цвет слоя:')
+        self.single_color_label.setStyleSheet(label_style)
+        single_color_layout.addWidget(self.single_color_label)
+        self.single_color_button = QPushButton()
+        self.single_color_button.clicked.connect(self.pick_single_color)
+        self.single_color_button.setFixedSize(20, 20)
+        single_color_layout.addWidget(self.single_color_button)
+        grouping_options_layout.addLayout(single_color_layout)
+
         opacity_layout = QHBoxLayout()
         self.opacity_label = QLabel('Прозрачность (%):')
         self.opacity_label.setStyleSheet(label_style)
@@ -630,6 +641,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         opacity_layout.addWidget(self.opacity_spinbox)
         grouping_options_layout.addLayout(opacity_layout)
         self.update_end_color_button()
+        self.update_single_color_button()
         self.numerical_color_display_layout = QVBoxLayout()
         self.numerical_color_label = QLabel('Группы значений и цвета:')
         self.numerical_color_label.setStyleSheet(label_style)
@@ -656,6 +668,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(False)
         self.categorical_group_field_combo.setVisible(False)
         self.categorical_color_label.setVisible(False)
+        self.single_color_label.setVisible(False)
+        self.single_color_button.setVisible(False)
         layout.addWidget(grouping_group_box)
 
         # Data filtering controls
@@ -1608,6 +1622,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         numerical = self.grouping_mode == 'numerical'
         categorical = self.grouping_mode == 'categorical'
+        single = self.grouping_mode == 'single'
 
         for w in [self.numerical_group_label, self.numerical_group_field_combo,
                    self.num_groups_label, self.num_groups_spinbox,
@@ -1618,6 +1633,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.categorical_group_label.setVisible(categorical)
         self.categorical_group_field_combo.setVisible(categorical)
         self.categorical_color_label.setVisible(categorical)
+
+        self.single_color_label.setVisible(single)
+        self.single_color_button.setVisible(single)
 
         if self.grouping_mode == 'numerical':
             self.on_numerical_grouping_field_changed()
@@ -1635,6 +1653,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             if self.grouping_mode == 'numerical':
                 self.on_numerical_grouping_field_changed()
 
+    def pick_single_color(self):
+        """Открывает диалог выбора цвета слоя."""
+        color = QColorDialog.getColor(self.single_color, self, "Выбрать цвет слоя")
+        if color.isValid():
+            self.single_color = color
+            self.update_single_color_button()
+
     def on_opacity_changed(self):
         """Update stored group opacity when the spinbox value changes."""
         self.group_opacity = self.opacity_spinbox.value()
@@ -1642,6 +1667,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
     def update_end_color_button(self):
         """Обновляет цвет кнопки, отображающей конечный цвет."""
         self.end_color_button.setStyleSheet(f"background-color: {self.end_color.name()}; border: 1px solid #888888;")
+
+    def update_single_color_button(self):
+        """Обновляет цвет кнопки, отображающей выбранный цвет слоя."""
+        self.single_color_button.setStyleSheet(f"background-color: {self.single_color.name()}; border: 1px solid #888888;")
 
     def on_categorical_grouping_field_changed(self):
         """Rebuild groups based on unique categorical values."""
