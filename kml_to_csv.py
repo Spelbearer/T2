@@ -56,6 +56,7 @@ class CheckableComboBox(QComboBox):
         else:
             item.setCheckState(Qt.CheckState.Checked)
         self.update_display_text()
+        self.selection_changed.emit()
 
     def checkedItems(self):
         items = []
