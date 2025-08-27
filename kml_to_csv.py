@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt, QPoint, QRect
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal
 
 import numpy as np
 import pandas as pd
@@ -25,13 +25,16 @@ MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
 class CheckableComboBox(QComboBox):
     """A QComboBox allowing multiple selection via checkable items."""
 
-    def __init__(self, parent=None):
+    selection_changed = pyqtSignal()
+
+    def __init__(self, parent=None, show_count=False):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
         self.view().pressed.connect(self.handle_item_pressed)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
+        self.show_count = show_count
 
     def addItem(self, text, data=None):
         item = QStandardItem(text)
@@ -64,7 +67,18 @@ class CheckableComboBox(QComboBox):
 
     def update_display_text(self):
         checked = self.checkedItems()
-        self.lineEdit().setText(", ".join(checked))
+        if self.show_count:
+            total = self.model().rowCount()
+            self.lineEdit().setText(f"Выбрано {len(checked)} из {total}")
+        else:
+            self.lineEdit().setText(", ".join(checked))
+
+    def set_all_checked(self, checked: bool):
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+        self.update_display_text()
+        self.selection_changed.emit()
 
 def jenks_breaks(data, num_classes):
     """Calculate Jenks natural breaks for the given data."""
@@ -208,6 +222,10 @@ class KmlGeneratorApp(QWidget):
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
+        self.all_data = []
+        self.all_headers = []
+        self.all_field_types = {}
+        self.selected_columns = []
         self.grouping_mode = 'numerical'
         self.group_opacity = 100
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
@@ -295,6 +313,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.sheet_combo.setEnabled(False)
         sheet_layout.addWidget(self.sheet_combo)
         file_group_layout.addLayout(sheet_layout)
+
+        columns_layout = QHBoxLayout()
+        self.columns_label = QLabel('Столбцы для работы:')
+        self.columns_label.setStyleSheet(label_style)
+        columns_layout.addWidget(self.columns_label)
+        self.columns_combo = CheckableComboBox(show_count=True)
+        self.columns_combo.setStyleSheet(combobox_style)
+        self.columns_combo.lineEdit().setPlaceholderText('Выберите столбцы…')
+        self.columns_combo.selection_changed.connect(self.on_columns_changed)
+        self.columns_combo.setEnabled(False)
+        columns_layout.addWidget(self.columns_combo)
+        self.select_all_columns_checkbox = QCheckBox('Выбрать все')
+        self.select_all_columns_checkbox.setTristate(True)
+        self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
+        self.select_all_columns_checkbox.stateChanged.connect(self.on_select_all_columns)
+        self.select_all_columns_checkbox.setEnabled(False)
+        self.select_all_columns_checkbox.setStyleSheet(checkbox_style)
+        columns_layout.addWidget(self.select_all_columns_checkbox)
+        file_group_layout.addLayout(columns_layout)
 
         output_file_layout = QHBoxLayout()
         self.output_file_label = QLabel('Выходной KML файл:')
@@ -643,7 +680,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.filtered_data = []
         self.headers = []
         self.field_types = {}
-        self.manual_group_bounds = {} # Clear manual bounds on new file load
+        self.manual_group_bounds = {}
+        self.all_data = []
+        self.all_headers = []
+        self.all_field_types = {}
+        self.selected_columns = []
+        self.columns_combo.clear()
+        self.columns_combo.setEnabled(False)
+        self.select_all_columns_checkbox.setEnabled(False)
 
         is_excel = file_path.lower().endswith(('.xlsx', '.xls', '.xlsm'))
         self.update_file_options_state(is_excel)
@@ -664,17 +708,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 df = df.fillna('')
                 self.headers = df.columns.astype(str).tolist()
                 self.data = df.values.tolist()
-
                 self._auto_cast_numeric()
                 self.filtered_data = [row[:] for row in self.data]
-
-
-                self._auto_cast_numeric()
-                self.filtered_data = [row[:] for row in self.data]
-
-                self.filtered_data = self.data[:]
-
-
                 if hasattr(self, 'filter_input'):
                     self.filter_input.setText('')
             else:
@@ -692,17 +727,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     
                     if data_start_index < len(all_lines):
                         self.data = all_lines[data_start_index:]
-
                         self._auto_cast_numeric()
                         self.filtered_data = [row[:] for row in self.data]
-
-
-                        self._auto_cast_numeric()
-                        self.filtered_data = [row[:] for row in self.data]
-
-                        self.filtered_data = self.data[:]
-
-
                         if hasattr(self, 'filter_input'):
                             self.filter_input.setText('')
                     else:
@@ -720,11 +746,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             self.headers = []
                     elif not has_header and not self.data:
                         self.headers = []
-            
+
+            if not self.headers:
+                QMessageBox.warning(self, "Warning", "В файле не обнаружены столбцы")
+                self.all_data, self.all_headers, self.all_field_types, self.selected_columns = [], [], {}, []
+                self.update_columns_combo()
+                self.preview_data()
+                self.update_field_combos()
+                return
+
             inferred = self._infer_field_types(self.data, self.headers)
             for field, f_type in inferred.items():
                 self.field_types[field] = f_type
-            
+
+            self.all_data = [row[:] for row in self.data]
+            self.all_headers = self.headers[:]
+            self.all_field_types = self.field_types.copy()
+            self.selected_columns = self.headers[:]
+            self.update_columns_combo()
+
             self.preview_data()
             self.update_field_combos()
             if self.grouping_mode == 'numerical':
@@ -735,6 +775,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
             self.data, self.filtered_data, self.headers, self.field_types = [], [], [], {}
+            self.all_data, self.all_headers, self.all_field_types, self.selected_columns = [], [], {}, []
+            self.update_columns_combo()
             self.preview_data()
             self.update_field_combos()
 
@@ -1386,6 +1428,81 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         self.data_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
+
+    def update_columns_combo(self):
+        self.columns_combo.blockSignals(True)
+        self.columns_combo.clear()
+        for field in self.all_headers:
+            self.columns_combo.addItem(field)
+        # Apply check state
+        for i, field in enumerate(self.all_headers):
+            item = self.columns_combo.model().item(i)
+            if field in self.selected_columns:
+                item.setCheckState(Qt.CheckState.Checked)
+        self.columns_combo.update_display_text()
+        self.columns_combo.blockSignals(False)
+
+        total = len(self.all_headers)
+        self.select_all_columns_checkbox.blockSignals(True)
+        if not self.selected_columns:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Unchecked)
+        elif len(self.selected_columns) == total:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
+        else:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.PartiallyChecked)
+        self.select_all_columns_checkbox.blockSignals(False)
+
+        enabled = total > 0
+        self.columns_combo.setEnabled(enabled)
+        self.select_all_columns_checkbox.setEnabled(enabled)
+
+    def on_columns_changed(self):
+        checked = self.columns_combo.checkedItems()
+        self.selected_columns = checked
+
+        total = len(self.all_headers)
+        self.select_all_columns_checkbox.blockSignals(True)
+        if not checked:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Unchecked)
+        elif len(checked) == total:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
+        else:
+            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.PartiallyChecked)
+        self.select_all_columns_checkbox.blockSignals(False)
+
+        if not checked:
+            self.headers = []
+            self.data = []
+            self.filtered_data = []
+            self.field_types = {}
+            if hasattr(self, 'filter_input'):
+                self.filter_input.setText('')
+            self.update_field_combos()
+            self.preview_data()
+            if self.grouping_mode == 'numerical':
+                self.on_numerical_grouping_field_changed()
+            else:
+                self.on_categorical_grouping_field_changed()
+            return
+
+        indices = [self.all_headers.index(c) for c in checked]
+        self.headers = [self.all_headers[i] for i in indices]
+        self.data = [[row[i] for i in indices] for row in self.all_data]
+        self.field_types = {h: self.all_field_types.get(h, 'auto') for h in self.headers}
+        self.filtered_data = [row[:] for row in self.data]
+        if hasattr(self, 'filter_input'):
+            self.filter_input.setText('')
+        self.update_field_combos()
+        self.preview_data()
+        if self.grouping_mode == 'numerical':
+            self.on_numerical_grouping_field_changed()
+        else:
+            self.on_categorical_grouping_field_changed()
+
+    def on_select_all_columns(self, state):
+        if state == Qt.CheckState.PartiallyChecked:
+            return
+        self.columns_combo.set_all_checked(state == Qt.CheckState.Checked)
 
     def on_coord_system_changed(self):
         """Переключает видимость полей WKT или Longitude/Latitude."""
