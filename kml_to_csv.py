@@ -35,6 +35,7 @@ class CheckableComboBox(QComboBox):
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
         self.show_count = show_count
+        self.select_all_text = "Выбрать все"
 
     def addItem(self, text, data=None):
         item = QStandardItem(text)
@@ -51,10 +52,17 @@ class CheckableComboBox(QComboBox):
 
     def handle_item_pressed(self, index):
         item = self.model().itemFromIndex(index)
-        if item.checkState() == Qt.CheckState.Checked:
-            item.setCheckState(Qt.CheckState.Unchecked)
+        if item.text() == self.select_all_text:
+            new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
+            for i in range(self.model().rowCount()):
+                cur_item = self.model().item(i)
+                if cur_item.text() == self.select_all_text:
+                    continue
+                cur_item.setCheckState(new_state)
         else:
-            item.setCheckState(Qt.CheckState.Checked)
+            new_state = Qt.CheckState.Unchecked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Checked
+            item.setCheckState(new_state)
+        self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
 
@@ -62,6 +70,8 @@ class CheckableComboBox(QComboBox):
         items = []
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
+            if item.text() == self.select_all_text:
+                continue
             if item.checkState() == Qt.CheckState.Checked:
                 items.append(item.text())
         return items
@@ -69,7 +79,10 @@ class CheckableComboBox(QComboBox):
     def update_display_text(self):
         checked = self.checkedItems()
         if self.show_count:
-            total = self.model().rowCount()
+            total = 0
+            for i in range(self.model().rowCount()):
+                if self.model().item(i).text() != self.select_all_text:
+                    total += 1
             self.lineEdit().setText(f"Выбрано {len(checked)} из {total}")
         else:
             self.lineEdit().setText(", ".join(checked))
@@ -77,9 +90,33 @@ class CheckableComboBox(QComboBox):
     def set_all_checked(self, checked: bool):
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
+            if item.text() == self.select_all_text:
+                continue
             item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+        self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
+
+    def update_select_all_state(self):
+        select_all_item = None
+        total = 0
+        checked = 0
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.text() == self.select_all_text:
+                select_all_item = item
+                continue
+            total += 1
+            if item.checkState() == Qt.CheckState.Checked:
+                checked += 1
+        if not select_all_item:
+            return
+        if checked == 0:
+            select_all_item.setCheckState(Qt.CheckState.Unchecked)
+        elif checked == total:
+            select_all_item.setCheckState(Qt.CheckState.Checked)
+        else:
+            select_all_item.setCheckState(Qt.CheckState.PartiallyChecked)
 
 def jenks_breaks(data, num_classes):
     """Calculate Jenks natural breaks for the given data."""
@@ -325,13 +362,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.columns_combo.selection_changed.connect(self.on_columns_changed)
         self.columns_combo.setEnabled(False)
         columns_layout.addWidget(self.columns_combo)
-        self.select_all_columns_checkbox = QCheckBox('Выбрать все')
-        self.select_all_columns_checkbox.setTristate(True)
-        self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
-        self.select_all_columns_checkbox.stateChanged.connect(self.on_select_all_columns)
-        self.select_all_columns_checkbox.setEnabled(False)
-        self.select_all_columns_checkbox.setStyleSheet(checkbox_style)
-        columns_layout.addWidget(self.select_all_columns_checkbox)
         file_group_layout.addLayout(columns_layout)
 
         output_file_layout = QHBoxLayout()
@@ -688,7 +718,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.selected_columns = []
         self.columns_combo.clear()
         self.columns_combo.setEnabled(False)
-        self.select_all_columns_checkbox.setEnabled(False)
 
         is_excel = file_path.lower().endswith(('.xlsx', '.xls', '.xlsm'))
         self.update_file_options_state(is_excel)
@@ -1433,43 +1462,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
     def update_columns_combo(self):
         self.columns_combo.blockSignals(True)
         self.columns_combo.clear()
+        self.columns_combo.addItem(self.columns_combo.select_all_text)
         for field in self.all_headers:
             self.columns_combo.addItem(field)
         # Apply check state
-        for i, field in enumerate(self.all_headers):
+        for i, field in enumerate(self.all_headers, start=1):
             item = self.columns_combo.model().item(i)
             if field in self.selected_columns:
                 item.setCheckState(Qt.CheckState.Checked)
+        self.columns_combo.update_select_all_state()
         self.columns_combo.update_display_text()
         self.columns_combo.blockSignals(False)
 
         total = len(self.all_headers)
-        self.select_all_columns_checkbox.blockSignals(True)
-        if not self.selected_columns:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Unchecked)
-        elif len(self.selected_columns) == total:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
-        else:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.PartiallyChecked)
-        self.select_all_columns_checkbox.blockSignals(False)
-
         enabled = total > 0
         self.columns_combo.setEnabled(enabled)
-        self.select_all_columns_checkbox.setEnabled(enabled)
 
     def on_columns_changed(self):
         checked = self.columns_combo.checkedItems()
         self.selected_columns = checked
-
-        total = len(self.all_headers)
-        self.select_all_columns_checkbox.blockSignals(True)
-        if not checked:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Unchecked)
-        elif len(checked) == total:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.Checked)
-        else:
-            self.select_all_columns_checkbox.setCheckState(Qt.CheckState.PartiallyChecked)
-        self.select_all_columns_checkbox.blockSignals(False)
 
         if not checked:
             self.headers = []
@@ -1499,11 +1510,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.on_numerical_grouping_field_changed()
         else:
             self.on_categorical_grouping_field_changed()
-
-    def on_select_all_columns(self, state):
-        if state == Qt.CheckState.PartiallyChecked:
-            return
-        self.columns_combo.set_all_checked(state == Qt.CheckState.Checked)
 
     def on_coord_system_changed(self):
         """Переключает видимость полей WKT или Longitude/Latitude."""
