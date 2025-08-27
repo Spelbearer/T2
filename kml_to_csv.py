@@ -285,6 +285,17 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         file_layout.addWidget(self.browse_button)
         file_group_layout.addLayout(file_layout)
 
+        sheet_layout = QHBoxLayout()
+        self.sheet_label = QLabel('Лист Excel:')
+        self.sheet_label.setStyleSheet(label_style)
+        sheet_layout.addWidget(self.sheet_label)
+        self.sheet_combo = QComboBox()
+        self.sheet_combo.setStyleSheet(combobox_style)
+        self.sheet_combo.currentTextChanged.connect(self.on_sheet_changed)
+        self.sheet_combo.setEnabled(False)
+        sheet_layout.addWidget(self.sheet_combo)
+        file_group_layout.addLayout(sheet_layout)
+
         output_file_layout = QHBoxLayout()
         self.output_file_label = QLabel('Выходной KML файл:')
         self.output_file_label.setStyleSheet(label_style)
@@ -576,6 +587,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.utf8_radio.setEnabled(not is_excel)
         self.cp1251_radio.setEnabled(not is_excel)
         self.encoding_label.setEnabled(not is_excel)
+        self.sheet_label.setEnabled(is_excel)
+        if not is_excel:
+            self.sheet_combo.clear()
+        self.sheet_combo.setEnabled(is_excel and self.sheet_combo.count() > 0)
 
     def browse_file(self):
         """Открывает диалог выбора файла и загружает данные."""
@@ -588,6 +603,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.file_path_input.setText(file_name)
             is_excel = file_name.lower().endswith(('.xlsx', '.xls', '.xlsm'))
             self.update_file_options_state(is_excel)
+            if is_excel:
+                self.load_sheet_names(file_name)
             self.load_data(file_name)
 
     def browse_output_file(self):
@@ -601,6 +618,24 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         file_path = self.file_path_input.text()
         if file_path:
             self.load_data(file_path)
+
+    def on_sheet_changed(self, _):
+        file_path = self.file_path_input.text()
+        if file_path:
+            self.load_data(file_path)
+
+    def load_sheet_names(self, file_path):
+        self.sheet_combo.clear()
+        try:
+            engine = 'openpyxl' if file_path.lower().endswith(('.xlsx', '.xlsm')) else 'xlrd'
+            xls = pd.ExcelFile(file_path, engine=engine)
+            self.sheet_combo.addItems(xls.sheet_names)
+            if xls.sheet_names:
+                self.sheet_combo.setCurrentIndex(0)
+            self.sheet_combo.setEnabled(True)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Не удалось получить список листов: {e}")
+            self.sheet_combo.setEnabled(False)
             
     def load_data(self, file_path):
         """Загружает данные из файла с учетом выбранных параметров."""
@@ -620,7 +655,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             if is_excel:
                 header_row = 0 if has_header else None
                 engine = 'openpyxl' if file_path.lower().endswith(('.xlsx', '.xlsm')) else 'xlrd'
-                df = pd.read_excel(file_path, header=header_row, skiprows=start_row, engine=engine)
+                sheet_name = self.sheet_combo.currentText() if self.sheet_combo.currentText() else 0
+                df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row, skiprows=start_row, engine=engine)
                 
                 if not has_header:
                     df.columns = [f'Column {i}' for i in range(len(df.columns))]
