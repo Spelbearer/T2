@@ -21,6 +21,27 @@ import colorsys
 
 MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
 
+WKT_FIELD_NAMES = {
+    "wkt", "geom", "geometry", "thegeom", "shape", "geomwkt",
+    "geometrywkt", "geometria", "геометрия", "геом"
+}
+
+LAT_FIELD_NAMES = {
+    "lat", "latitude", "y", "ycoord", "ycoordinate", "latwgs84",
+    "latwgs", "широта", "широты", "latdeg", "latdd", "коордy",
+    "yкоорд", "coordy"
+}
+
+LON_FIELD_NAMES = {
+    "lon", "long", "longitude", "lng", "x", "xcoord",
+    "xcoordinate", "lonwgs84", "lonwgs", "долгота", "долготы",
+    "долг", "londeg", "коордx", "xкоорд", "coordx"
+}
+
+
+def normalize_field_name(name: str) -> str:
+    return re.sub(r"[^a-zA-Zа-яА-Я0-9]", "", name).lower()
+
 
 class CheckableComboBox(QComboBox):
     """A QComboBox allowing multiple selection via checkable items."""
@@ -1443,9 +1464,43 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         elif all_fields:
             self.kml_label_field_combo.setCurrentText(all_fields[0])
 
+        self._auto_select_coord_fields(current_texts)
+
         # Re-enable signals now that combo boxes are populated
         for c in combos + [self.description_fields_combo]:
             c.blockSignals(False)
+
+
+    def _auto_select_coord_fields(self, previous_texts):
+        wkt_prev, lon_prev, lat_prev = previous_texts[:3]
+        headers = self.headers
+
+        wkt_candidate = None
+        if wkt_prev not in headers:
+            for field in headers:
+                norm = normalize_field_name(field)
+                if self.field_types.get(field) == 'Geometry' or norm in WKT_FIELD_NAMES:
+                    wkt_candidate = field
+                    break
+            if wkt_candidate:
+                self.wkt_field_combo.setCurrentText(wkt_candidate)
+                self.wkt_radio.setChecked(True)
+        else:
+            wkt_candidate = wkt_prev
+
+        if (lon_prev not in headers or lat_prev not in headers) and not wkt_candidate:
+            lon_candidate = None
+            lat_candidate = None
+            for field in headers:
+                norm = normalize_field_name(field)
+                if not lon_candidate and norm in LON_FIELD_NAMES:
+                    lon_candidate = field
+                if not lat_candidate and norm in LAT_FIELD_NAMES:
+                    lat_candidate = field
+            if lon_candidate and lat_candidate:
+                self.lon_field_combo.setCurrentText(lon_candidate)
+                self.lat_field_combo.setCurrentText(lat_candidate)
+                self.lonlat_radio.setChecked(True)
 
 
     def apply_filter(self):
