@@ -12,9 +12,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem, QIcon, QPixmap
 
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
-
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer, QThread
 
 
 import numpy as np
@@ -42,6 +40,28 @@ LON_FIELD_NAMES = {
     "xcoordinate", "lonwgs84", "lonwgs", "долгота", "долготы",
     "долг", "londeg", "коордx", "xкоорд", "coordx"
 }
+
+
+class IconLoaderThread(QThread):
+    """Background thread for downloading icon images."""
+
+    result = pyqtSignal(list, bool)
+
+    def __init__(self, icons):
+        super().__init__()
+        self.icons = icons
+
+    def run(self):
+        icons = []
+        network_ok = True
+        for name, url in self.icons:
+            try:
+                data = urllib.request.urlopen(url, timeout=5).read()
+                icons.append((name, data, url))
+            except Exception:
+                network_ok = False
+                icons.append((name, None, url))
+        self.result.emit(icons, network_ok)
 
 
 def normalize_field_name(name: str) -> str:
@@ -597,8 +617,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
         QTimer.singleShot(0, self.populate_icon_combo)
-
-        self.populate_icon_combo()
 
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
@@ -1732,21 +1750,20 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         base_url = "http://maps.google.com/mapfiles/kml/pal2/"
         icon_names = ["icon18.png", "icon19.png", "icon20.png", "icon21.png"]
         self.icon_combo.clear()
-        network_ok = True
-        for name in icon_names:
-            url = base_url + name
-            try:
 
-                data = urllib.request.urlopen(url, timeout=2).read()
+        icons = [(name, base_url + name) for name in icon_names]
+        self._icon_loader_thread = IconLoaderThread(icons)
+        self._icon_loader_thread.result.connect(self._on_icons_loaded)
+        self._icon_loader_thread.start()
 
-                data = urllib.request.urlopen(url).read()
-
+    def _on_icons_loaded(self, icons, network_ok):
+        for name, data, url in icons:
+            if data:
                 pixmap = QPixmap()
                 pixmap.loadFromData(data)
                 icon = QIcon(pixmap.scaled(16, 16))
                 self.icon_combo.addItem(icon, name, userData=url)
-            except Exception:
-                network_ok = False
+            else:
                 self.icon_combo.addItem(name, userData=url)
         self.icon_combo.addItem('Custom URL...', userData='custom')
         if not network_ok:
