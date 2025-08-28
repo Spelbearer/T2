@@ -1,5 +1,7 @@
 import sys
 import csv
+import os
+import shutil
 
 # Allow very large geometry strings when reading CSV files
 csv.field_size_limit(1000000)
@@ -10,8 +12,8 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QPushButton, QFileDialog, QLineEdit, QComboBox, QColorDialog,
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
-from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
+from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem, QIcon
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QSize
 
 import numpy as np
 import pandas as pd
@@ -572,13 +574,22 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.use_custom_icon_checkbox.stateChanged.connect(self.toggle_custom_icon_input)
         self.use_custom_icon_checkbox.setStyleSheet(checkbox_style)
         coord_layout.addWidget(self.use_custom_icon_checkbox)
+
         self.icon_url_layout = QHBoxLayout()
-        self.icon_url_label = QLabel('URL на иконку:')
+        self.icon_url_label = QLabel('Выберите иконку:')
         self.icon_url_label.setStyleSheet(label_style)
-        self.icon_url_input = QLineEdit('http://maps.google.com/mapfiles/kml/pal2/icon18.png') # Changed default icon URL
-        self.icon_url_input.setStyleSheet(lineedit_style)
+        self.icon_combo = QComboBox()
+        self.icon_combo.setStyleSheet(combobox_style)
+        self.icon_combo.setIconSize(QSize(24, 24))
+        self.icons_dir = os.path.join(os.path.dirname(__file__), 'icons')
+        self.default_icon_path = os.path.join(self.icons_dir, 'default.png')
+        for filename in sorted(os.listdir(self.icons_dir)):
+            if filename == 'default.png':
+                continue
+            path = os.path.join(self.icons_dir, filename)
+            self.icon_combo.addItem(QIcon(path), os.path.splitext(filename)[0], userData=path)
         self.icon_url_layout.addWidget(self.icon_url_label)
-        self.icon_url_layout.addWidget(self.icon_url_input)
+        self.icon_url_layout.addWidget(self.icon_combo)
         coord_layout.addLayout(self.icon_url_layout)
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
@@ -1100,14 +1111,18 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
 
 
+                use_custom_icon = self.use_custom_icon_checkbox.isChecked()
+                icon_path = self.icon_combo.currentData() if use_custom_icon else self.default_icon_path
+                icon_filename = None
+                if icon_path and os.path.isfile(icon_path):
+                    icon_filename = os.path.basename(icon_path)
+                    try:
+                        shutil.copy(icon_path, os.path.join(os.path.dirname(output_file), icon_filename))
+                    except Exception:
+                        pass
                 for obj in kml_objects:
-                    if isinstance(obj, simplekml.Point):
-                        use_custom_icon = self.use_custom_icon_checkbox.isChecked()
-                        custom_icon_url = self.icon_url_input.text()
-                        if use_custom_icon and custom_icon_url:
-                            obj.style.iconstyle.icon.href = custom_icon_url
-                        else:
-                            obj.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'  # Changed default icon URL
+                    if isinstance(obj, simplekml.Point) and icon_filename:
+                        obj.style.iconstyle.icon.href = icon_filename
             kml.save(output_file)
 
             msg_lines = [f"KML-файл '{output_file}' успешно создан!",
@@ -1704,10 +1719,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.add_label_button.setText('Выбрать поле для label')
 
     def toggle_custom_icon_input(self):
-        """Показать или скрыть поле ввода URL иконки."""
+        """Показать или скрыть выбор иконки."""
         is_checked = self.use_custom_icon_checkbox.isChecked()
         self.icon_url_label.setVisible(is_checked)
-        self.icon_url_input.setVisible(is_checked)
+        self.icon_combo.setVisible(is_checked)
 
     def on_grouping_mode_changed(self):
         """Switch between numerical, categorical, and single-color modes."""
