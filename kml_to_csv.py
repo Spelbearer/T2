@@ -944,6 +944,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
 
+        total_rows = len(self.filtered_data)
+        placed_count = 0
+        invalid_coord_rows = []
+
         try:
             for i, row in enumerate(self.filtered_data):
                 if self.grouping_mode == 'numerical' and num_group_idx != -1:
@@ -1019,7 +1023,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                                     )
                                     kml_objects.append(label_point)
                         except Exception as e:
-                            print(f"Row {i+1} WKT Error: {e}"); continue
+                            invalid_coord_rows.append(i + 1)
+                            continue
                 else:
                     if lon_idx != -1 and lat_idx != -1 and lon_idx < len(row) and lat_idx < len(row):
                         try:
@@ -1027,10 +1032,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             lat = float(str(row[lat_idx]).replace(',', '.'))
                             kml_objects.append(target_container.newpoint(name=label_text, coords=[(lon, lat)]))
                         except (ValueError, TypeError):
-                            print(f"Row {i+1} Lon/Lat Error"); continue
+                            invalid_coord_rows.append(i + 1)
+                            continue
 
                 if not kml_objects:
                     continue
+
+                placed_count += 1
 
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
@@ -1101,7 +1109,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                         else:
                             obj.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'  # Changed default icon URL
             kml.save(output_file)
-            QMessageBox.information(self, "KML Generated", f"KML-файл '{output_file}' успешно создан!")
+
+            msg_lines = [f"KML-файл '{output_file}' успешно создан!",
+                          f"Нанесено {placed_count} точек из {total_rows}"]
+            for row_num in invalid_coord_rows:
+                msg_lines.append(f"в строке {row_num} ошибка в координатах")
+            QMessageBox.information(self, "KML Generated", "\n".join(msg_lines))
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка при генерации KML: {e}")
 
