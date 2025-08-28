@@ -1808,6 +1808,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.group_colors[self.groups[index]['label']] = color
             self.update_group_display()
 
+    def pick_numeric_group_color(self, index):
+        """Allow manual selection of a numerical group color."""
+        current = self.groups[index]['color']
+        color = QColorDialog.getColor(current, self, "Выбрать цвет группы")
+        if color.isValid():
+            self.groups[index]['color'] = color
+            self.group_colors[self.groups[index]['label']] = color
+            self.update_group_display()
+
     def on_numerical_grouping_field_changed(self):
         """
         Handles the change of the numerical grouping field or number of groups.
@@ -1999,6 +2008,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 swatch = QLabel()
                 swatch.setFixedSize(20, 20)
                 swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
+                if i < len(self.groups) - 1:
+                    swatch.mousePressEvent = lambda e, idx=i: self.pick_numeric_group_color(idx)
                 g_layout.addWidget(swatch)
 
                 lower_label = QLabel(f"{self._format_range_value(group['range'][0])} - ")
@@ -2106,6 +2117,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 self.manual_group_bounds[group_index + 1] = {}
             self.manual_group_bounds[group_index + 1]['lower'] = new_value
 
+        self.group_colors = {}
         for i, group in enumerate(self.groups):
             manual_lower = self.manual_group_bounds.get(i, {}).get('lower')
             lower_display = manual_lower if manual_lower is not None else group['range'][0]
@@ -2114,16 +2126,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             upper_display = manual_upper if manual_upper is not None else group['range'][1]
 
             group['label'] = f"{self._format_range_value(lower_display)} - {self._format_range_value(upper_display)}"
-            
-            num_groups = len(self.groups)
-            start_color = QColor(255, 255, 255)
-            end_color = self.end_color
-            r = start_color.red() + i * (end_color.red() - start_color.red()) // (num_groups - 1) if num_groups > 1 else start_color.red()
-            g = start_color.green() + i * (end_color.green() - start_color.green()) // (num_groups - 1) if num_groups > 1 else start_color.green()
-            b = start_color.blue() + i * (end_color.blue() - start_color.blue()) // (num_groups - 1) if num_groups > 1 else start_color.blue()
-            group_color = QColor(r, g, b)
-            self.groups[i]['color'] = group_color
-            self.group_colors[group['label']] = group_color
+            self.group_colors[group['label']] = group['color']
 
         self.update_group_display()
 
