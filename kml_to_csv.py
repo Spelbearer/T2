@@ -56,6 +56,7 @@ class CheckableComboBox(QComboBox):
         # This prevents issues where a column could not be re-enabled after
         # being toggled off (especially for the first column in the list).
         self.view().pressed.connect(self.handle_item_pressed)
+        self.view().viewport().installEventFilter(self)
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText("")
@@ -104,6 +105,12 @@ class CheckableComboBox(QComboBox):
     def eventFilter(self, obj, event):
         if obj is self.lineEdit() and event.type() == QEvent.Type.MouseButtonPress:
             self.showPopup()
+            return True
+        if obj is self.view().viewport() and event.type() == QEvent.Type.MouseButtonRelease:
+            # Prevent the default behavior from toggling the item again when
+            # clicking directly on the checkbox indicator. This ensures that
+            # the check state changed in ``handle_item_pressed`` remains
+            # unchanged for both label and checkbox clicks.
             return True
         return super().eventFilter(obj, event)
 
