@@ -10,13 +10,14 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QPushButton, QFileDialog, QLineEdit, QComboBox, QColorDialog,
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
-from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
+from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem, QIcon, QPixmap
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
 
 import numpy as np
 import pandas as pd
 import re
 import colorsys
+import urllib.request
 
 
 MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
@@ -572,14 +573,25 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.use_custom_icon_checkbox.stateChanged.connect(self.toggle_custom_icon_input)
         self.use_custom_icon_checkbox.setStyleSheet(checkbox_style)
         coord_layout.addWidget(self.use_custom_icon_checkbox)
+
         self.icon_url_layout = QHBoxLayout()
-        self.icon_url_label = QLabel('URL на иконку:')
+        self.icon_url_label = QLabel('Иконка:')
         self.icon_url_label.setStyleSheet(label_style)
-        self.icon_url_input = QLineEdit('http://maps.google.com/mapfiles/kml/pal2/icon18.png') # Changed default icon URL
-        self.icon_url_input.setStyleSheet(lineedit_style)
+
+        self.icon_combo = QComboBox()
+        self.icon_combo.setStyleSheet(combobox_style)
+        self.icon_combo.currentIndexChanged.connect(self.toggle_custom_icon_input)
+
+        self.custom_icon_input = QLineEdit()
+        self.custom_icon_input.setStyleSheet(lineedit_style)
+        self.custom_icon_input.setVisible(False)
+
         self.icon_url_layout.addWidget(self.icon_url_label)
-        self.icon_url_layout.addWidget(self.icon_url_input)
+        self.icon_url_layout.addWidget(self.icon_combo)
+        self.icon_url_layout.addWidget(self.custom_icon_input)
         coord_layout.addLayout(self.icon_url_layout)
+
+        self.populate_icon_combo()
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
         layout.addWidget(coord_group_box)
@@ -1103,11 +1115,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 for obj in kml_objects:
                     if isinstance(obj, simplekml.Point):
                         use_custom_icon = self.use_custom_icon_checkbox.isChecked()
-                        custom_icon_url = self.icon_url_input.text()
-                        if use_custom_icon and custom_icon_url:
-                            obj.style.iconstyle.icon.href = custom_icon_url
-                        else:
-                            obj.style.iconstyle.icon.href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'  # Changed default icon URL
+                        icon_href = 'http://maps.google.com/mapfiles/kml/paddle/wht-blank.png'
+                        if use_custom_icon:
+                            if self.icon_combo.currentData() == 'custom':
+                                custom_url = self.custom_icon_input.text().strip()
+                                if custom_url:
+                                    icon_href = custom_url
+                            else:
+                                icon_href = self.icon_combo.currentData()
+                        obj.style.iconstyle.icon.href = icon_href
             kml.save(output_file)
 
             msg_lines = [f"KML-файл '{output_file}' успешно создан!",
@@ -1693,7 +1709,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def toggle_kml_label_field(self):
         """Показать или скрыть поле для выбора поля KML метки."""
-        is_visible = self.kml_label_field_label.isVisible() 
+        is_visible = self.kml_label_field_label.isVisible()
         
         self.kml_label_field_label.setVisible(not is_visible)
         self.kml_label_field_combo.setVisible(not is_visible)
@@ -1703,11 +1719,39 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         else:
             self.add_label_button.setText('Выбрать поле для label')
 
+    def populate_icon_combo(self):
+        """Заполняет комбобокс стандартными иконками Google Earth."""
+        base_url = "http://maps.google.com/mapfiles/kml/pal2/"
+        icon_names = ["icon18.png", "icon19.png", "icon20.png", "icon21.png"]
+        self.icon_combo.clear()
+        network_ok = True
+        for name in icon_names:
+            url = base_url + name
+            try:
+                data = urllib.request.urlopen(url).read()
+                pixmap = QPixmap()
+                pixmap.loadFromData(data)
+                icon = QIcon(pixmap.scaled(16, 16))
+                self.icon_combo.addItem(icon, name, userData=url)
+            except Exception:
+                network_ok = False
+                self.icon_combo.addItem(name, userData=url)
+        self.icon_combo.addItem('Custom URL...', userData='custom')
+        if not network_ok:
+            QMessageBox.warning(self, 'Icon download failed',
+                                'Не удалось загрузить иконки. Введите URL вручную.')
+            self.icon_combo.setCurrentIndex(self.icon_combo.count() - 1)
+            self.use_custom_icon_checkbox.setChecked(True)
+            self.custom_icon_input.setVisible(True)
+            self.custom_icon_input.setFocus()
+
     def toggle_custom_icon_input(self):
-        """Показать или скрыть поле ввода URL иконки."""
+        """Показать или скрыть поле выбора и ввода URL иконки."""
         is_checked = self.use_custom_icon_checkbox.isChecked()
         self.icon_url_label.setVisible(is_checked)
-        self.icon_url_input.setVisible(is_checked)
+        self.icon_combo.setVisible(is_checked)
+        show_custom = is_checked and (self.icon_combo.currentData() == 'custom')
+        self.custom_icon_input.setVisible(show_custom)
 
     def on_grouping_mode_changed(self):
         """Switch between numerical, categorical, and single-color modes."""
