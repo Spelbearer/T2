@@ -11,7 +11,11 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem, QIcon, QPixmap
+
+from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent, QTimer
+
 from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
+
 
 import numpy as np
 import pandas as pd
@@ -591,7 +595,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.icon_url_layout.addWidget(self.custom_icon_input)
         coord_layout.addLayout(self.icon_url_layout)
 
+
+        QTimer.singleShot(0, self.populate_icon_combo)
+
         self.populate_icon_combo()
+
         self.toggle_custom_icon_input()
         coord_group_box.setLayout(coord_layout)
         layout.addWidget(coord_group_box)
@@ -1728,7 +1736,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for name in icon_names:
             url = base_url + name
             try:
+
+                data = urllib.request.urlopen(url, timeout=2).read()
+
                 data = urllib.request.urlopen(url).read()
+
                 pixmap = QPixmap()
                 pixmap.loadFromData(data)
                 icon = QIcon(pixmap.scaled(16, 16))
