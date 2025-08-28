@@ -51,6 +51,7 @@ class CheckableComboBox(QComboBox):
     def __init__(self, parent=None, show_count=False):
         super().__init__(parent)
         self.setModel(QStandardItemModel(self))
+        self._pressed_index = None
         # Use the pressed signal and handle state changes manually so that
         # the check state is always updated before we emit signals.
         # This prevents issues where a column could not be re-enabled after
@@ -79,6 +80,7 @@ class CheckableComboBox(QComboBox):
 
     def handle_item_pressed(self, index):
         """Toggle check state for the pressed item and update dependent UI."""
+        self._pressed_index = index
         item = self.model().itemFromIndex(index)
         if item.text() == self.select_all_text:
             # Toggle all items based on the current state of the select-all item
@@ -107,10 +109,10 @@ class CheckableComboBox(QComboBox):
             self.showPopup()
             return True
         if obj is self.view().viewport() and event.type() == QEvent.Type.MouseButtonRelease:
-            # Prevent the default behavior from toggling the item again when
-            # clicking directly on the checkbox indicator. This ensures that
-            # the check state changed in ``handle_item_pressed`` remains
-            # unchanged for both label and checkbox clicks.
+            index = self.view().indexAt(event.pos())
+            if index.isValid() and (self._pressed_index is None or index != self._pressed_index):
+                self.handle_item_pressed(index)
+            self._pressed_index = None
             return True
         return super().eventFilter(obj, event)
 
