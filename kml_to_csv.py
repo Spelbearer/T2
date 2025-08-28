@@ -804,6 +804,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 with open(file_path, 'r', encoding=self.encoding, errors='ignore') as f:
                     reader = csv.reader(f, delimiter=delimiter)
                     all_lines = list(reader)
+                    # Remove UTF-8 BOM from the first column if present so that
+                    # the initial field is not dropped or mismatched when used
+                    # as a label or description field.
+                    for line in all_lines:
+                        if line:
+                            line[0] = line[0].lstrip('\ufeff')
 
                     data_start_index = start_row
                     if has_header:
