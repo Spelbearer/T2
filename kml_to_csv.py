@@ -1667,11 +1667,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         for idx, field in enumerate(self.all_headers):
             # Store the original column index in the item for later retrieval
             self.columns_combo.addItem(field, idx)
-            item = self.columns_combo.model().item(idx + 1)
-            if idx in self.selected_columns:
-                item.setCheckState(Qt.CheckState.Checked)
-        self.columns_combo.update_select_all_state()
-        self.columns_combo.update_display_text()
+
+        # Ensure the default selection reflects previously chosen columns
+        # and that the displayed count shows all selected by default.
+        checked_names = [
+            self.all_headers[i] for i in self.selected_columns
+            if i < len(self.all_headers)
+        ]
+        self.columns_combo.set_checked_items(checked_names)
         self.columns_combo.blockSignals(False)
 
         total = len(self.all_headers)
