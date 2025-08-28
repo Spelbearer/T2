@@ -15,6 +15,9 @@ any number of groups up to twenty without the value being automatically
 reduced. Only the first twenty rows of the loaded file are shown in the
 interface. A third grouping mode lets you color all unique values with a
 single chosen color and opacity.
+For numerical grouping by ranges, colors for all groups except the last can be
+edited individually by clicking their swatches. Changing the final gradient
+color resets the gradient from that color back to white.
 
 preview table. Data may be filtered with a simple expression in the
 **Filter formula** field, for example `City=London and Value>5`.
