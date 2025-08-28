@@ -1023,6 +1023,24 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             elif isinstance(obj, simplekml.Polygon):
                                 obj.style.polystyle.color = fill_color
                                 obj.style.linestyle.color = line_color
+                elif self.grouping_mode == 'single':
+                    color = self.single_color
+                    alpha = int(255 * (self.group_opacity / 100))
+                    fill_color = simplekml.Color.rgb(
+                        color.red(), color.green(), color.blue(), alpha
+                    )
+                    line_color = simplekml.Color.rgb(
+                        color.red(), color.green(), color.blue()
+                    )
+
+                    for obj in kml_objects:
+                        if isinstance(obj, simplekml.Point):
+                            obj.style.iconstyle.color = line_color
+                        elif isinstance(obj, simplekml.LineString):
+                            obj.style.linestyle.color = line_color
+                        elif isinstance(obj, simplekml.Polygon):
+                            obj.style.polystyle.color = fill_color
+                            obj.style.linestyle.color = line_color
 
                 # Build description snippet
                 desc_fields = self.description_fields_combo.checkedItems()
