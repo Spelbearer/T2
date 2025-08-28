@@ -64,6 +64,9 @@ class CheckableComboBox(QComboBox):
         self.lineEdit().installEventFilter(self)
         self.show_count = show_count
         self.select_all_text = "Выбрать все"
+        # Track the order in which items are checked so that callers can
+        # retrieve selected values respecting user choice order.
+        self.selection_order = []
 
     def addItem(self, text, data=None):
         item = QStandardItem(text)
@@ -76,6 +79,7 @@ class CheckableComboBox(QComboBox):
 
     def clear(self):
         self.model().clear()
+        self.selection_order = []
         self.update_display_text()
 
     def handle_item_pressed(self, index):
@@ -88,17 +92,26 @@ class CheckableComboBox(QComboBox):
                          if item.checkState() == Qt.CheckState.Checked
                          else Qt.CheckState.Checked)
             item.setCheckState(new_state)
+            self.selection_order = []
             for i in range(self.model().rowCount()):
                 cur_item = self.model().item(i)
                 if cur_item.text() == self.select_all_text:
                     continue
                 cur_item.setCheckState(new_state)
+                if new_state == Qt.CheckState.Checked:
+                    self.selection_order.append(cur_item.text())
         else:
             # Toggle the individual item
             new_state = (Qt.CheckState.Unchecked
                          if item.checkState() == Qt.CheckState.Checked
                          else Qt.CheckState.Checked)
             item.setCheckState(new_state)
+            if new_state == Qt.CheckState.Checked:
+                if item.text() not in self.selection_order:
+                    self.selection_order.append(item.text())
+            else:
+                if item.text() in self.selection_order:
+                    self.selection_order.remove(item.text())
         self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
@@ -117,14 +130,8 @@ class CheckableComboBox(QComboBox):
         return super().eventFilter(obj, event)
 
     def checkedItems(self):
-        items = []
-        for i in range(self.model().rowCount()):
-            item = self.model().item(i)
-            if item.text() == self.select_all_text:
-                continue
-            if item.checkState() == Qt.CheckState.Checked:
-                items.append(item.text())
-        return items
+        # Return checked items in the exact order they were selected by the user
+        return list(self.selection_order)
 
     def checkedIndices(self):
         """Return the integer indices of all checked items.
@@ -156,14 +163,34 @@ class CheckableComboBox(QComboBox):
             self.lineEdit().setText(", ".join(checked))
 
     def set_all_checked(self, checked: bool):
+        self.selection_order = []
         for i in range(self.model().rowCount()):
             item = self.model().item(i)
             if item.text() == self.select_all_text:
                 continue
             item.setCheckState(Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked)
+            if checked:
+                self.selection_order.append(item.text())
         self.update_select_all_state()
         self.update_display_text()
         self.selection_changed.emit()
+
+    def set_checked_items(self, items):
+        """Programmatically set checked items using the provided order."""
+        self.selection_order = []
+        for i in range(self.model().rowCount()):
+            item = self.model().item(i)
+            if item.text() == self.select_all_text:
+                continue
+            item.setCheckState(Qt.CheckState.Unchecked)
+        for name in items:
+            matches = self.model().findItems(name)
+            if matches:
+                itm = matches[0]
+                itm.setCheckState(Qt.CheckState.Checked)
+                self.selection_order.append(name)
+        self.update_select_all_state()
+        self.update_display_text()
 
     def update_select_all_state(self):
         select_all_item = None
@@ -1442,7 +1469,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                   self.numerical_group_field_combo, self.categorical_group_field_combo,
                   self.kml_label_field_combo]
         current_texts = [c.currentText() for c in combos]
-        selected_desc = set(self.description_fields_combo.checkedItems())
+        # Preserve the order in which description fields were selected
+        selected_desc = self.description_fields_combo.checkedItems()
 
 
         # Prevent signals from firing while repopulating combos
@@ -1456,10 +1484,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.description_fields_combo.clear()
         for field in all_fields:
             self.description_fields_combo.addItem(field)
-            if field in selected_desc:
-                items = self.description_fields_combo.model().findItems(field)
-                if items:
-                    items[0].setCheckState(Qt.CheckState.Checked)
+        # Reapply previously selected description fields respecting the
+        # original selection order
+        if selected_desc:
+            self.description_fields_combo.set_checked_items(selected_desc)
 
         for c in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.kml_label_field_combo]:
             c.addItems(all_fields)
