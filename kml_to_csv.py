@@ -328,6 +328,7 @@ class KmlGeneratorApp(QWidget):
         self.group_opacity = 100
         self.current_header_combo = None # To keep track of the currently open QComboBox for header editing
         self.current_header_combo_column = -1 # Track which column the combo belongs to
+        self.numerical_field_is_int = False
 
         self.initUI()
 
@@ -1228,6 +1229,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         return inferred_types
 
 
+    def _format_range_value(self, value):
+        """Format range boundary based on current field type."""
+        return f"{int(value)}" if self.numerical_field_is_int else f"{value:.2f}"
+
+
     def on_header_double_clicked(self, column_index):
         """
         Handles double-click on a table header section.
@@ -1803,11 +1809,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         col_index = self.headers.index(selected_field)
+        self.numerical_field_is_int = self.field_types.get(selected_field) == 'Int'
         numerical_values = []
         for row in self.filtered_data:
             if col_index < len(row):
                 try:
-                    numerical_values.append(float(str(row[col_index]).replace(',', '.')))
+                    val = str(row[col_index]).replace(',', '.')
+                    numerical_values.append(int(float(val)) if self.numerical_field_is_int else float(val))
                 except (ValueError, TypeError):
                     pass
 
@@ -1892,7 +1900,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 bins = [min_val, min_val + 1] if num_groups > 1 else [min_val, min_val]
             else:
                 bins = np.linspace(min_val, max_val, num_groups + 1)
-                
+
+        bins = list(bins)
+        if self.numerical_field_is_int:
+            bins = [int(round(b)) for b in bins]
+
         self.groups = []
         start_color = QColor(255, 255, 255)
         end_color = self.end_color
@@ -1901,25 +1913,29 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             idx = i if i < len(bins) else len(bins) - 1
             lower_bound = bins[idx]
             upper_bound = bins[idx + 1] if idx + 1 < len(bins) else bins[-1]
-            
+
             if i == num_groups - 1 and numerical_values:
                 upper_bound = max(numerical_values)
 
             if i in self.manual_group_bounds:
                 lower_bound = self.manual_group_bounds[i].get('lower', lower_bound)
                 upper_bound = self.manual_group_bounds[i].get('upper', upper_bound)
-            
+
             if i > 0 and (i-1) in self.manual_group_bounds:
                 prev_upper = self.manual_group_bounds[i-1].get('upper')
                 if prev_upper is not None:
                     lower_bound = prev_upper
+
+            if self.numerical_field_is_int:
+                lower_bound = int(round(lower_bound))
+                upper_bound = int(round(upper_bound))
 
             r = start_color.red() + i * (end_color.red() - start_color.red()) // (num_groups - 1) if num_groups > 1 else start_color.red()
             g = start_color.green() + i * (end_color.green() - start_color.green()) // (num_groups - 1) if num_groups > 1 else start_color.green()
             b = start_color.blue() + i * (end_color.blue() - start_color.blue()) // (num_groups - 1) if num_groups > 1 else start_color.blue()
             group_color = QColor(r, g, b)
 
-            label = f'{lower_bound:.2f} - {upper_bound:.2f}'
+            label = f"{self._format_range_value(lower_bound)} - {self._format_range_value(upper_bound)}"
             self.groups.append({
                 'label': label,
                 'range': [lower_bound, upper_bound],
@@ -1960,7 +1976,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 for row in self.filtered_data:
                     if col_index < len(row):
                         try:
-                            numerical_values.append(float(str(row[col_index]).replace(',', '.')))
+                            val = str(row[col_index]).replace(',', '.')
+                            numerical_values.append(int(float(val)) if self.numerical_field_is_int else float(val))
                         except (ValueError, TypeError):
                             pass
 
@@ -1971,11 +1988,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 swatch.setStyleSheet(f"background-color: {group['color'].name()}; border: 1px solid #888888;")
                 g_layout.addWidget(swatch)
 
-                lower_label = QLabel(f"{group['range'][0]:.2f} - ")
+                lower_label = QLabel(f"{self._format_range_value(group['range'][0])} - ")
                 lower_label.setStyleSheet("QLabel { color: #333333;}")
                 g_layout.addWidget(lower_label)
 
-                upper_input = QLineEdit(f"{group['range'][1]:.2f}")
+                upper_input = QLineEdit(self._format_range_value(group['range'][1]))
                 upper_input.setFixedWidth(80)
                 upper_input.setStyleSheet("QLineEdit { background-color: #EEEEEE; border: 1px solid #CCCCCC; padding: 3px; }")
 
@@ -2038,27 +2055,30 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         """
         if group_index == len(self.groups) - 1:
             QMessageBox.warning(self, "Invalid Action", "The upper bound of the last group cannot be manually edited.")
-            sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
+            sender.setText(self._format_range_value(self.groups[group_index]['range'][1]))
             return
 
         try:
-            new_value = float(sender.text().replace(',', '.'))
+            text_val = sender.text().replace(',', '.')
+            new_value = int(float(text_val)) if self.numerical_field_is_int else float(text_val)
         except ValueError:
             QMessageBox.warning(self, "Неверный ввод", "Пожалуйста введите число.")
-            sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
+            sender.setText(self._format_range_value(self.groups[group_index]['range'][1]))
             return
 
         current_lower_bound = self.groups[group_index]['range'][0]
         if new_value <= current_lower_bound:
-            QMessageBox.warning(self, "Неправильная граница", f"Верхняя граница не может быть меньше нижней границы текущей группы ({current_lower_bound:.2f}).")
-            sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
+            QMessageBox.warning(self, "Неправильная граница",
+                                f"Верхняя граница не может быть меньше нижней границы текущей группы ({self._format_range_value(current_lower_bound)}).")
+            sender.setText(self._format_range_value(self.groups[group_index]['range'][1]))
             return
-        
+
         if group_index + 1 < len(self.groups):
             next_upper_bound = self.groups[group_index + 1]['range'][1]
             if new_value >= next_upper_bound:
-                QMessageBox.warning(self, "Неправильная граница", f"Верхняя граница не может быть больше верхней границы следующей группы ({next_upper_bound:.2f}).")
-                sender.setText(f"{self.groups[group_index]['range'][1]:.2f}")
+                QMessageBox.warning(self, "Неправильная граница",
+                                    f"Верхняя граница не может быть больше верхней границы следующей группы ({self._format_range_value(next_upper_bound)}).")
+                sender.setText(self._format_range_value(self.groups[group_index]['range'][1]))
                 return
 
         if group_index not in self.manual_group_bounds:
@@ -2080,7 +2100,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             manual_upper = self.manual_group_bounds.get(i, {}).get('upper')
             upper_display = manual_upper if manual_upper is not None else group['range'][1]
 
-            group['label'] = f"{lower_display:.2f} - {upper_display:.2f}"
+            group['label'] = f"{self._format_range_value(lower_display)} - {self._format_range_value(upper_display)}"
             
             num_groups = len(self.groups)
             start_color = QColor(255, 255, 255)
