@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QL
                              QCheckBox, QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
                              QMessageBox, QRadioButton, QButtonGroup, QGroupBox, QScrollArea)
 from PyQt6.QtGui import QColor, QFont, QStandardItemModel, QStandardItem
-from PyQt6.QtCore import Qt, QPoint, QRect, pyqtSignal, QEvent
+from PyQt6.QtCore import Qt, QRect, pyqtSignal, QEvent
 
 import numpy as np
 import pandas as pd
