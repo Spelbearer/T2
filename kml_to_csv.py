@@ -4,7 +4,6 @@ import csv
 # Allow very large geometry strings when reading CSV files
 csv.field_size_limit(1000000)
 import simplekml
-from shapely.geometry import Point
 from shapely import wkt
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
                              QPushButton, QFileDialog, QLineEdit, QComboBox, QColorDialog,
