@@ -870,11 +870,27 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 )
                 if not has_header:
                     loaded_df.columns = [f'Column {i}' for i in range(len(loaded_df.columns))]
+
+                    df.columns = [f'Column {i}' for i in range(len(df.columns))]
+
+                df = df.fillna('')
+                self.headers = df.columns.astype(str).tolist()
+                self.data = df.values.tolist()
+                self._auto_cast_numeric()
+                self.df = pd.DataFrame(self.data, columns=self.headers)
+                self.filtered_df = self.df.copy()
+                self.filtered_data = self.filtered_df.values.tolist()
+                if hasattr(self, 'filter_input'):
+                    self.filter_input.setText('')
             else:
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
                 header_row = start_row if has_header else None
+
                 loaded_df = pd.read_csv(
+
+                df = pd.read_csv(
+
                     file_path,
                     sep=delimiter,
                     header=header_row,
