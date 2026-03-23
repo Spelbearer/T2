@@ -19,6 +19,7 @@ import colorsys
 
 
 MISSING_VALS = {"", "null", "none", "nan", "na", "n/a"}
+JENKS_SAMPLE_LIMIT = 5000
 
 WKT_FIELD_NAMES = {
     "wkt", "geom", "geometry", "thegeom", "shape", "geomwkt",
@@ -259,6 +260,17 @@ def jenks_breaks(data, num_classes):
     return breaks
 
 
+def prepare_jenks_input(data, limit=JENKS_SAMPLE_LIMIT):
+    """Downsample large sorted inputs for Jenks to avoid quadratic blowups."""
+    if len(data) <= limit:
+        return data
+
+    sorted_data = np.sort(np.asarray(data, dtype=float))
+    sample_idx = np.linspace(0, len(sorted_data) - 1, limit, dtype=int)
+    sampled = sorted_data[sample_idx]
+    return sampled.tolist()
+
+
 def parse_filter_expression(expr: str) -> str:
     """Convert a user-friendly filter expression to a pandas query string."""
     if not expr:
@@ -355,7 +367,7 @@ class KmlGeneratorApp(QWidget):
         self.field_types = {}
         self.encoding = 'utf-8'
         self.manual_group_bounds = {}
-        self.all_data = []
+        self.base_df = pd.DataFrame()
         self.all_headers = []
         self.all_field_types = {}
         self.selected_columns = []
@@ -828,7 +840,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.headers = []
         self.field_types = {}
         self.manual_group_bounds = {}
-        self.all_data = []
+        self.base_df = pd.DataFrame()
         self.all_headers = []
         self.all_field_types = {}
         self.selected_columns = []
@@ -849,9 +861,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 header_row = 0 if has_header else None
                 engine = 'openpyxl' if file_path.lower().endswith(('.xlsx', '.xlsm')) else 'xlrd'
                 sheet_name = self.sheet_combo.currentText() if self.sheet_combo.currentText() else 0
-                df = pd.read_excel(file_path, sheet_name=sheet_name, header=header_row, skiprows=start_row, engine=engine)
-                
+                loaded_df = pd.read_excel(
+                    file_path,
+                    sheet_name=sheet_name,
+                    header=header_row,
+                    skiprows=start_row,
+                    engine=engine,
+                )
                 if not has_header:
+                    loaded_df.columns = [f'Column {i}' for i in range(len(loaded_df.columns))]
+
                     df.columns = [f'Column {i}' for i in range(len(df.columns))]
 
                 df = df.fillna('')
@@ -867,7 +886,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
                 header_row = start_row if has_header else None
+
+                loaded_df = pd.read_csv(
+
                 df = pd.read_csv(
+
                     file_path,
                     sep=delimiter,
                     header=header_row,
@@ -877,49 +900,39 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     dtype=str,
                     keep_default_na=False,
                 )
-                if not df.empty and len(df.columns) > 0:
-                    first_col = str(df.columns[0]).lstrip('\ufeff')
-                    renamed = {df.columns[0]: first_col}
-                    df = df.rename(columns=renamed)
+                if len(loaded_df.columns) > 0:
+                    first_col = str(loaded_df.columns[0]).lstrip('\ufeff')
+                    loaded_df = loaded_df.rename(columns={loaded_df.columns[0]: first_col})
                 if not has_header:
-                    df.columns = [f'Column {i}' for i in range(len(df.columns))]
+                    loaded_df.columns = [f'Column {i}' for i in range(len(loaded_df.columns))]
 
-                df = df.fillna('')
-                self.headers = df.columns.astype(str).tolist()
-                self.data = df.values.tolist()
-                self._auto_cast_numeric()
-                if self.headers:
-                    self.df = pd.DataFrame(self.data, columns=self.headers)
-                    self.filtered_df = self.df.copy()
-                    self.filtered_data = self.filtered_df.values.tolist()
-                else:
-                    self.filtered_df = pd.DataFrame()
-                    self.filtered_data = []
-                if hasattr(self, 'filter_input'):
-                    self.filter_input.setText('')
+            loaded_df = loaded_df.fillna('')
+            loaded_df.columns = loaded_df.columns.astype(str)
 
-            if not self.headers:
+            if loaded_df.columns.empty:
                 QMessageBox.warning(self, "Warning", "В файле не обнаружены столбцы")
-                self.all_data, self.all_headers, self.all_field_types, self.selected_columns = [], [], {}, []
                 self.update_columns_combo()
                 self.preview_data()
                 self.update_field_combos()
                 return
 
-            inferred = self._infer_field_types(self.data, self.headers)
+            self.base_df = loaded_df.reset_index(drop=True)
+            self.all_headers = self.base_df.columns.tolist()
+            self.selected_columns = list(range(len(self.all_headers)))
+
+            self.headers = self.all_headers[:]
+            self.df = self.base_df.copy()
+            self._auto_cast_numeric()
+
+            inferred = self._infer_field_types(self.df, self.headers)
             for field, f_type in inferred.items():
                 self.field_types[field] = f_type
 
-            self.df = pd.DataFrame(self.data, columns=self.headers) if self.headers else pd.DataFrame()
             self.filtered_df = self.df.copy()
-            self.filtered_data = self.filtered_df.values.tolist()
             self._numeric_query_df = None
-            self.all_data = [row[:] for row in self.data]
-            self.all_headers = self.headers[:]
             self.all_field_types = self.field_types.copy()
-            # Track selected columns by their positional indices to avoid
-            # dropping the first column or mis-handling duplicate names.
-            self.selected_columns = list(range(len(self.headers)))
+            if hasattr(self, 'filter_input'):
+                self.filter_input.setText('')
             self.update_columns_combo()
 
             self.preview_data()
@@ -934,7 +947,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Ошибка загрузки файла: {e}\n\nДля файлов Excel убедитесь, что установлены 'pandas' и 'openpyxl'.")
             self.data, self.filtered_data, self.headers, self.field_types = [], [], [], {}
-            self.all_data, self.all_headers, self.all_field_types, self.selected_columns = [], [], {}, []
+            self.base_df = pd.DataFrame()
+            self.all_headers, self.all_field_types, self.selected_columns = [], {}, []
+            self.df = pd.DataFrame()
+            self.filtered_df = pd.DataFrame()
+            self._numeric_query_df = None
             self.update_columns_combo()
             self.preview_data()
             self.update_field_combos()
@@ -945,7 +962,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if not output_file:
             QMessageBox.warning(self, "Warning", "Пожалуйста, укажите выходной KML-файл.")
             return
-        if not self.filtered_data:
+        if self.filtered_df.empty:
             QMessageBox.warning(self, "Warning", "Нет данных для генерации KML.")
             return
 
@@ -985,12 +1002,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
 
-        total_rows = len(self.filtered_df.index) if not self.filtered_df.empty else len(self.filtered_data)
+        total_rows = len(self.filtered_df.index)
         placed_count = 0
         invalid_coord_rows = []
         desc_fields = self.description_fields_combo.checkedItems()
         desc_indices = [(field, field_indices.get(field, -1)) for field in desc_fields]
-        row_iter = self.filtered_df.itertuples(index=False, name=None) if not self.filtered_df.empty else iter(self.filtered_data)
+        row_iter = self.filtered_df.itertuples(index=False, name=None)
 
         try:
             for i, row in enumerate(row_iter):
@@ -1162,69 +1179,38 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
     def _auto_cast_numeric(self):
         """Convert columns with only numeric-looking values to int or float."""
-        if not self.data or not self.headers:
+        if self.df.empty or not self.headers:
             return
 
-        num_cols = len(self.headers)
         int_pattern = re.compile(r"^-?\d+$")
         float_pattern = re.compile(r"^-?\d+(?:[.,]\d+)?$")
 
-        missing_vals = MISSING_VALS
+        for header in self.headers:
+            series = self.df[header].astype(str).str.strip()
+            normalized = series.str.replace(",", ".", regex=False)
+            non_empty = normalized[~series.str.lower().isin(MISSING_VALS)]
 
-
-        for col_idx in range(num_cols):
-            is_int_col = True
-            is_numeric_col = True
-            for row in self.data:
-                if col_idx >= len(row):
-                    continue
-                val = str(row[col_idx]).strip()
-
-                if val.lower() in missing_vals:
-
-                    if val == "":
-
-                        continue
-                val_dot = val.replace(",", ".")
-                if int_pattern.fullmatch(val_dot):
-                    continue
-                elif float_pattern.fullmatch(val_dot):
-                    is_int_col = False
-                else:
-                    is_numeric_col = False
-                    break
-
-            if not is_numeric_col:
+            if non_empty.empty:
                 continue
 
-            for row in self.data:
-                if col_idx >= len(row):
-                    continue
-                val = str(row[col_idx]).strip()
-
-                if val.lower() in missing_vals:
-
-                    if val == "":
-
-                        row[col_idx] = ""
-                        continue
-                val_dot = val.replace(",", ".")
-                try:
-                    row[col_idx] = int(val_dot) if is_int_col else float(val_dot)
-                except ValueError:
-                    pass
-
-            self.field_types[self.headers[col_idx]] = "Int" if is_int_col else "Float"
+            if non_empty.map(lambda val: bool(int_pattern.fullmatch(val))).all():
+                numeric_series = pd.to_numeric(normalized, errors="coerce").astype("Int64")
+                self.df[header] = numeric_series.where(~series.eq(""), "")
+                self.field_types[header] = "Int"
+            elif non_empty.map(lambda val: bool(float_pattern.fullmatch(val))).all():
+                numeric_series = pd.to_numeric(normalized, errors="coerce")
+                self.df[header] = numeric_series.where(~series.eq(""), "")
+                self.field_types[header] = "Float"
 
     def _infer_field_types(self, data, headers):
         """
         Infers the data types for each field based on a sample of the data.
         Determines if a field is 'float', 'geometry', or 'varchar'.
         """
-        if not data:
+        if data is None or data.empty:
             return {}
-        
-        num_columns = len(headers) if headers else (len(data[0]) if data else 0)
+
+        num_columns = len(headers) if headers else len(data.columns)
 
         inferred_types = {}
         current_fields = headers if headers else [f'Column {i}' for i in range(num_columns)]
@@ -1234,13 +1220,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             is_numerical = True
             is_wkt = False
             
-            sample_values = []
-            for r_idx in range(min(len(data), 100)):
-                if i < len(data[r_idx]):
-                    value = str(data[r_idx][i]).strip()
-                    if value.lower() in MISSING_VALS or value == "":
-                        continue
-                    sample_values.append(value)
+            sample_series = data.iloc[:100, i].astype(str).str.strip()
+            sample_values = [value for value in sample_series if value and value.lower() not in MISSING_VALS]
 
             if not sample_values:
                 inferred_types[field_name] = 'Varchar'
@@ -1402,19 +1383,14 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         Infers the data type for a single column.
         Helper function for 'auto' type selection.
         """
-        if not self.data or column_index >= len(self.headers):
+        if self.df.empty or column_index >= len(self.headers):
             return 'Varchar' # Default if no data or invalid column
 
         is_numerical = True
         is_wkt = False
-        
-        sample_values = []
-        for r_idx in range(min(len(self.data), 100)):
-            if column_index < len(self.data[r_idx]):
-                value = str(self.data[r_idx][column_index]).strip()
-                if value.lower() in MISSING_VALS or value == "":
-                    continue
-                sample_values.append(value)
+
+        sample_series = self.df.iloc[:100, column_index].astype(str).str.strip()
+        sample_values = [value for value in sample_series if value and value.lower() not in MISSING_VALS]
 
         if not sample_values:
             return 'Varchar'
@@ -1458,14 +1434,13 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         Updates the available fields in all QComboBox widgets based on loaded headers
         and inferred field types.
         """
-        if not self.data and not self.headers:
+        if not self.headers:
             for combo in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
                           self.numerical_group_field_combo, self.categorical_group_field_combo,
                           self.kml_label_field_combo, self.description_fields_combo]:
                 combo.clear()
             return
 
-        num_columns = len(self.headers) if self.headers else (len(self.data[0]) if self.data else 0)
         all_fields = self.headers[:]
         
         numerical_fields = [field for field in all_fields if self.field_types.get(field) in ['Int', 'Float']]
@@ -1570,10 +1545,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         formula = self.filter_input.text().strip()
         if self.df.empty:
             self.filtered_df = self.df.copy()
-            self.filtered_data = []
         elif not formula:
             self.filtered_df = self.df.copy()
-            self.filtered_data = self.filtered_df.values.tolist()
         else:
             try:
                 if self._numeric_query_df is None or list(self._numeric_query_df.columns) != self.headers:
@@ -1589,7 +1562,6 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 parsed = parse_filter_expression(formula)
                 filtered_indices = self._numeric_query_df.query(parsed).index
                 self.filtered_df = self.df.loc[filtered_indices].copy()
-                self.filtered_data = self.filtered_df.values.tolist()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Invalid filter: {e}")
                 return
@@ -1689,11 +1661,9 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             return
 
         self.headers = [self.all_headers[i] for i in indices]
-        self.df = pd.DataFrame(self.all_data, columns=self.all_headers).iloc[:, indices].copy()
-        self.data = self.df.values.tolist()
+        self.df = self.base_df.iloc[:, indices].copy()
         self.field_types = {h: self.all_field_types.get(h, 'auto') for h in self.headers}
         self.filtered_df = self.df.copy()
-        self.filtered_data = self.filtered_df.values.tolist()
         self._numeric_query_df = None
         if hasattr(self, 'filter_input'):
             self.filter_input.setText('')
@@ -1805,7 +1775,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.group_colors = {}
 
         selected_field = self.categorical_group_field_combo.currentText()
-        if not selected_field or not self.filtered_data or selected_field not in self.headers:
+        if not selected_field or self.filtered_df.empty or selected_field not in self.headers:
             self.update_group_display()
             return
 
@@ -1849,7 +1819,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.groups = []
 
         selected_field = self.numerical_group_field_combo.currentText()
-        if not selected_field or not self.filtered_data or selected_field not in self.headers:
+        if not selected_field or self.filtered_df.empty or selected_field not in self.headers:
             self.update_group_display()
             return
 
@@ -1874,7 +1844,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         unique_values = sorted(set(numerical_values))
 
         if len(unique_values) > 2 and num_groups > 1:
-            bins = jenks_breaks(numerical_values, num_groups)
+            bins = jenks_breaks(prepare_jenks_input(numerical_values), num_groups)
 
             if len(set(bins)) < len(bins) or len(bins) != num_groups + 1:
 
