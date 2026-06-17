@@ -607,6 +607,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         self.kml_label_field_label.setVisible(False)
         self.kml_label_field_combo.setVisible(False)
 
+        self.show_kml_labels_checkbox = QCheckBox('Отображать label на карте')
+        self.show_kml_labels_checkbox.setChecked(True)
+        self.show_kml_labels_checkbox.setStyleSheet(checkbox_style)
+        coord_layout.addWidget(self.show_kml_labels_checkbox)
+        self.show_kml_labels_checkbox.setVisible(False)
+
         # Description fields selection
         desc_layout = QHBoxLayout()
         self.description_fields_label = QLabel('Поля для описания:')
@@ -972,9 +978,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         
         # Check if KML label field is visible and get its index
         label_idx = -1
-        if self.kml_label_field_combo.isVisible():
+        label_field_active = self.kml_label_field_combo.isVisible()
+        if label_field_active:
             label_idx = field_indices.get(self.kml_label_field_combo.currentText(), -1)
-
+        show_labels_on_map = self.show_kml_labels_checkbox.isChecked()
 
         num_group_idx = field_indices.get(self.numerical_group_field_combo.currentText(), -1)
         cat_group_idx = field_indices.get(self.categorical_group_field_combo.currentText(), -1)
@@ -1061,7 +1068,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             assigned_group = {'label': val}
 
                 label_text = ''
-                if self.kml_label_field_combo.isVisible() and label_idx != -1 and label_idx < len(row):
+                if label_field_active and label_idx != -1 and label_idx < len(row):
                     label_text = str(row[label_idx])
 
                 kml_objects = []
@@ -1081,7 +1088,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                                     innerboundaryis=[list(r.coords) for r in geom.interiors],
                                 )
                                 kml_objects.append(poly)
-                                if label_text:
+                                if label_text and show_labels_on_map:
                                     pt = geom.representative_point()
                                     label_point = target_container.newpoint(
                                         name=label_text,
@@ -1090,7 +1097,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                                     kml_objects.append(label_point)
                             elif geom.geom_type == 'MultiPolygon':
                                 largest_poly = max(geom.geoms, key=lambda g: g.area)
-                                label_pt = largest_poly.representative_point() if label_text else None
+                                label_pt = largest_poly.representative_point() if label_text and show_labels_on_map else None
                                 for poly_geom in geom.geoms:
                                     poly = target_container.newpolygon(
                                         name=label_text,
@@ -1098,7 +1105,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                                         innerboundaryis=[list(r.coords) for r in poly_geom.interiors],
                                     )
                                     kml_objects.append(poly)
-                                if label_text:
+                                if label_pt is not None:
                                     label_point = target_container.newpoint(
                                         name=label_text,
                                         coords=[(label_pt.x, label_pt.y)],
@@ -1121,6 +1128,10 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                     continue
 
                 placed_count += 1
+
+                if label_text and not show_labels_on_map:
+                    for obj in kml_objects:
+                        obj.style.labelstyle.scale = 0
 
                 if assigned_group:
                     color = self.group_colors.get(assigned_group['label'])
@@ -1725,6 +1736,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         
         self.kml_label_field_label.setVisible(not is_visible)
         self.kml_label_field_combo.setVisible(not is_visible)
+        self.show_kml_labels_checkbox.setVisible(not is_visible)
         
         if not is_visible:
             self.add_label_button.setText('Скрыть поле KML метки')
