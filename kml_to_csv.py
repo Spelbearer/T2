@@ -617,6 +617,16 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         desc_layout.addWidget(self.description_fields_combo)
         coord_layout.addLayout(desc_layout)
 
+        # Field used to split generated KML placemarks into folders
+        folder_group_layout = QHBoxLayout()
+        self.folder_group_field_label = QLabel('Поле для группировки по папкам:')
+        self.folder_group_field_label.setStyleSheet(label_style)
+        self.folder_group_field_combo = QComboBox()
+        self.folder_group_field_combo.setStyleSheet(combobox_style)
+        folder_group_layout.addWidget(self.folder_group_field_label)
+        folder_group_layout.addWidget(self.folder_group_field_combo)
+        coord_layout.addLayout(folder_group_layout)
+
         self.use_custom_icon_checkbox = QCheckBox('Использовать пользовательскую иконку')
         self.use_custom_icon_checkbox.setChecked(False)
         self.use_custom_icon_checkbox.stateChanged.connect(self.toggle_custom_icon_input)
@@ -870,27 +880,12 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                 )
                 if not has_header:
                     loaded_df.columns = [f'Column {i}' for i in range(len(loaded_df.columns))]
-
-                    df.columns = [f'Column {i}' for i in range(len(df.columns))]
-
-                df = df.fillna('')
-                self.headers = df.columns.astype(str).tolist()
-                self.data = df.values.tolist()
-                self._auto_cast_numeric()
-                self.df = pd.DataFrame(self.data, columns=self.headers)
-                self.filtered_df = self.df.copy()
-                self.filtered_data = self.filtered_df.values.tolist()
-                if hasattr(self, 'filter_input'):
-                    self.filter_input.setText('')
             else:
                 delimiter = self.delimiter_input.text()
                 self.encoding = 'utf-8' if self.utf8_radio.isChecked() else 'cp1251'
                 header_row = start_row if has_header else None
 
                 loaded_df = pd.read_csv(
-
-                df = pd.read_csv(
-
                     file_path,
                     sep=delimiter,
                     header=header_row,
@@ -991,14 +986,19 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             QMessageBox.critical(self, "Error", "Выбранные поля долготы/широты не найдены.")
             return
 
+        folder_group_idx = field_indices.get(self.folder_group_field_combo.currentText(), -1)
+        folder_group_active = folder_group_idx != -1
+
         kml_folders = {}
+        field_folders = {}
+        nested_group_folders = {}
         if self.grouping_mode == 'numerical':
             grouping_active = num_group_idx != -1 and self.groups
         elif self.grouping_mode == 'categorical':
             grouping_active = cat_group_idx != -1 and self.groups
         else:
             grouping_active = False
-        if grouping_active:
+        if grouping_active and not folder_group_active:
             for group in self.groups:
                 kml_folders[group['label']] = kml.newfolder(name=group['label'])
 
@@ -1020,6 +1020,15 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
                 target_container = kml
                 assigned_group = None
+                folder_group_value = None
+
+                if folder_group_active and folder_group_idx < len(row):
+                    folder_group_value = str(row[folder_group_idx]).strip()
+                    if not folder_group_value:
+                        folder_group_value = 'Без значения'
+                    if folder_group_value not in field_folders:
+                        field_folders[folder_group_value] = kml.newfolder(name=folder_group_value)
+                    target_container = field_folders[folder_group_value]
 
                 if grouping_active:
                     if self.grouping_mode == 'numerical' and num_group_idx != -1 and num_group_idx < len(row):
@@ -1028,14 +1037,26 @@ border: 1px solid #CCCCCC; font-weight: bold; }
                             for group in self.groups:
                                 lower, upper = group['range']
                                 if (lower <= value < upper) or (group == self.groups[-1] and np.isclose(value, upper)):
-                                    target_container = kml_folders[group['label']]
+                                    if folder_group_active:
+                                        folder_key = (folder_group_value, group['label'])
+                                        if folder_key not in nested_group_folders:
+                                            nested_group_folders[folder_key] = field_folders[folder_group_value].newfolder(name=group['label'])
+                                        target_container = nested_group_folders[folder_key]
+                                    else:
+                                        target_container = kml_folders[group['label']]
                                     assigned_group = group
                                     break
                         except (ValueError, TypeError, IndexError):
                             pass
                     elif self.grouping_mode == 'categorical' and cat_group_idx != -1 and cat_group_idx < len(row):
                         val = str(row[cat_group_idx])
-                        if val in kml_folders:
+                        if folder_group_active:
+                            folder_key = (folder_group_value, val)
+                            if folder_key not in nested_group_folders:
+                                nested_group_folders[folder_key] = field_folders[folder_group_value].newfolder(name=val)
+                            target_container = nested_group_folders[folder_key]
+                            assigned_group = {'label': val}
+                        elif val in kml_folders:
                             target_container = kml_folders[val]
                             assigned_group = {'label': val}
 
@@ -1437,7 +1458,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
         if not self.headers:
             for combo in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
                           self.numerical_group_field_combo, self.categorical_group_field_combo,
-                          self.kml_label_field_combo, self.description_fields_combo]:
+                          self.kml_label_field_combo, self.description_fields_combo,
+                          self.folder_group_field_combo]:
                 combo.clear()
             return
 
@@ -1448,7 +1470,7 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         combos = [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo,
                   self.numerical_group_field_combo, self.categorical_group_field_combo,
-                  self.kml_label_field_combo]
+                  self.kml_label_field_combo, self.folder_group_field_combo]
         current_texts = [c.currentText() for c in combos]
         # Preserve the order in which description fields were selected
         selected_desc = self.description_fields_combo.checkedItems()
@@ -1472,6 +1494,8 @@ border: 1px solid #CCCCCC; font-weight: bold; }
 
         for c in [self.wkt_field_combo, self.lon_field_combo, self.lat_field_combo, self.kml_label_field_combo]:
             c.addItems(all_fields)
+        self.folder_group_field_combo.addItem('Без группировки по папкам')
+        self.folder_group_field_combo.addItems(all_fields)
         self.numerical_group_field_combo.addItems(numerical_fields)
         self.categorical_group_field_combo.addItems(categorical_fields)
 
@@ -1500,6 +1524,11 @@ border: 1px solid #CCCCCC; font-weight: bold; }
             self.kml_label_field_combo.setCurrentText(current_texts[5])
         elif all_fields:
             self.kml_label_field_combo.setCurrentText(all_fields[0])
+
+        if current_texts[6] in all_fields:
+            self.folder_group_field_combo.setCurrentText(current_texts[6])
+        else:
+            self.folder_group_field_combo.setCurrentText('Без группировки по папкам')
 
         self._auto_select_coord_fields(current_texts)
 
